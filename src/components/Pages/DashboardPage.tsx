@@ -1,12 +1,19 @@
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { SUBJECT_NAMES, Subject } from '@/data/constants'
-import { Stepper } from '@/components/Layout/Stepper'
 
 const statCards = [
   { key: 'teachers', label: '教师总数', icon: '👨‍🏫', color: 'from-blue-500 to-blue-600' },
   { key: 'classes', label: '班级总数', icon: '🏫', color: 'from-emerald-500 to-emerald-600' },
   { key: 'curriculum', label: '课程条目', icon: '📚', color: 'from-purple-500 to-purple-600' },
   { key: 'scheduled', label: '已排课时', icon: '✅', color: 'from-amber-500 to-amber-600' },
+]
+
+// 流程步骤卡片数据
+const flowSteps = [
+  { icon: '📥', title: '导入数据', desc: '上传 Excel 文件' },
+  { icon: '⚙️', title: '配置规则', desc: '设置排课约束' },
+  { icon: '⚡', title: '生成课表', desc: '智能算法排课' },
+  { icon: '📋', title: '微调导出', desc: '调整并导出' },
 ]
 
 export function DashboardPage() {
@@ -27,39 +34,53 @@ export function DashboardPage() {
 
   const hasData = teachers.length > 0 && classes.length > 0 && curriculumItems.length > 0
 
+  // 空白状态 - 简约专业风格
   if (!hasData) {
     return (
-      <div className="h-full flex flex-col items-center justify-center p-6 bg-[var(--color-bg-secondary)] animate-fade-in relative overflow-hidden">
-        {/* Decorative background elements */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-full blur-3xl -z-10"></div>
-        
-        <div className="text-center max-w-2xl mb-12">
-          <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] flex items-center justify-center shadow-xl mb-6 shadow-[var(--color-primary)]/20 rotate-[10deg] hover:rotate-0 transition-transform duration-500">
-            <span className="text-white text-4xl">S</span>
-          </div>
-          <h1 className="font-serif text-4xl font-bold text-[var(--color-text-primary)] mb-4">
-            欢迎来到 SchoolGrid 智能排课系统
-          </h1>
-          <p className="text-lg text-[var(--color-text-secondary)] leading-relaxed">
-            仅需四个简单步骤，即可生成全校最优课表。您可以在任意时刻回到此向导查看当前进度。
-          </p>
+      <div className="h-full flex flex-col items-center justify-center p-6 bg-[var(--color-bg-secondary)] animate-fade-in">
+        {/* Logo */}
+        <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)] flex items-center justify-center mb-6">
+          <span className="text-white font-serif font-bold text-xl">S</span>
         </div>
 
-        <div className="w-full max-w-4xl bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white p-2 mb-12">
-          <div className="bg-transparent rounded-2xl overflow-hidden">
-            <Stepper currentStep={0} />
-          </div>
-        </div>
+        {/* 标题层次 */}
+        <h1 className="font-serif text-4xl font-semibold text-[var(--color-text-primary)]">
+          SchoolGrid
+        </h1>
+        <p className="text-xl text-[var(--color-text-secondary)] mt-2">
+          规则驱动的智能排课
+        </p>
+        <p className="text-base text-[var(--color-text-muted)] mt-4 max-w-md text-center">
+          导入数据，配置规则，一键生成全校课表
+        </p>
 
+        {/* CTA 按钮 */}
         <button
           onClick={() => setView('import')}
-          className="group relative px-10 py-4 bg-[var(--color-primary)] text-white rounded-2xl font-semibold text-lg overflow-hidden shadow-xl shadow-[var(--color-primary)]/30 hover:shadow-2xl hover:shadow-[var(--color-primary)]/40 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
+          className="mt-8 px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-base
+                     hover:bg-[var(--color-primary-dark)] transition-colors duration-200"
         >
-          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
-          <span className="relative text-2xl">📥</span>
-          <span className="relative">开始第一步：导入数据</span>
-          <span className="relative group-hover:translate-x-1 transition-transform">➡️</span>
+          开始使用
         </button>
+
+        {/* 流程步骤卡片 */}
+        <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl w-full px-4">
+          {flowSteps.map((step, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-xl p-5 border border-[var(--color-border-light)]
+                         hover:shadow-sm hover:border-[var(--color-border)] transition-all duration-200"
+            >
+              <span className="text-2xl mb-3 block">{step.icon}</span>
+              <h3 className="font-medium text-[var(--color-text-primary)] text-sm">
+                {step.title}
+              </h3>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                {step.desc}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
