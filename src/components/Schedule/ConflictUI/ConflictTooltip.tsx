@@ -177,10 +177,14 @@ export function ConflictTooltip({ visible, conflict, position, onClose }: Confli
     <div
       className={`
         fixed z-[9999] w-72 p-3 rounded-lg shadow-xl border-2
-        animate-in fade-in-0 zoom-in-95 duration-200
+        transition-opacity duration-200
         ${severityStyles.border} ${severityStyles.bg}
       `}
-      style={{ left: position.x, top: position.y }}
+      style={{
+        left: position.x,
+        top: position.y,
+        animation: 'fadeIn 0.2s ease-out'
+      }}
       role="tooltip"
       aria-live="polite"
     >
@@ -228,13 +232,14 @@ export function ConflictTooltip({ visible, conflict, position, onClose }: Confli
       
       {/* 小箭头指示器 */}
       <div
-        className={`
-          absolute w-3 h-3 rotate-45 ${severityStyles.bg} ${severityStyles.border}
-          ${position.placement === 'left' ? 'right-[-7px] top-4 border-l-0 border-b-0' : ''}
-          ${position.placement === 'right' ? 'left-[-7px] top-4 border-r-0 border-t-0' : ''}
-          ${position.placement === 'top' ? 'bottom-[-7px] left-4 border-t-0 border-l-0' : ''}
-          ${position.placement === 'bottom' ? 'top-[-7px] left-4 border-b-0 border-r-0' : ''}
-        `}
+        className={`absolute w-3 h-3 ${severityStyles.bg} ${severityStyles.border}`}
+        style={{
+          transform: 'rotate(45deg)',
+          ...(position.placement === 'left' ? { right: '-7px', top: '16px', borderLeftWidth: 0, borderBottomWidth: 0 } : {}),
+          ...(position.placement === 'right' ? { left: '-7px', top: '16px', borderRightWidth: 0, borderTopWidth: 0 } : {}),
+          ...(position.placement === 'top' ? { bottom: '-7px', left: '16px', borderTopWidth: 0, borderLeftWidth: 0 } : {}),
+          ...(position.placement === 'bottom' ? { top: '-7px', left: '16px', borderBottomWidth: 0, borderRightWidth: 0 } : {}),
+        }}
       />
     </div>
   )
