@@ -11,6 +11,7 @@ import {
 import { findSameDaySwaps } from './p0SameDaySwap'
 import { findCrossDaySwaps } from './p1CrossDaySwap'
 import { findSubstitutes } from './p2Substitute'
+import { useRuleStore } from '@/stores/ruleStore'
 
 /**
  * 调课建议引擎
@@ -45,6 +46,7 @@ export class AdjustmentEngine {
   private teachers: Teacher[]
   private schedule: SchoolSchedule
   private teacherSchedules: Map<string, Set<string>>
+  private subjectForbiddenSlots: Map<string, Set<string>>
   private config: AdjustmentEngineConfig
 
   constructor(
@@ -56,6 +58,7 @@ export class AdjustmentEngine {
     this.schedule = schedule
     this.config = { ...DEFAULT_CONFIG, ...config }
     this.teacherSchedules = this.buildTeacherSchedules()
+    this.subjectForbiddenSlots = this.buildSubjectForbiddenSlots()
   }
 
   /**
@@ -74,6 +77,24 @@ export class AdjustmentEngine {
     }
 
     return schedules
+  }
+
+  /**
+   * 构建学科绝对禁排时段表（从 ruleStore 读取）
+   * subject → Set<"dayOfWeek_period">
+   */
+  private buildSubjectForbiddenSlots(): Map<string, Set<string>> {
+    const forbidden = new Map<string, Set<string>>()
+    const { subjectTimeRules } = useRuleStore.getState()
+    for (const rule of subjectTimeRules) {
+      if (rule.type === 'must_not') {
+        if (!forbidden.has(rule.subject)) {
+          forbidden.set(rule.subject, new Set())
+        }
+        forbidden.get(rule.subject)!.add(`${rule.dayOfWeek}_${rule.period}`)
+      }
+    }
+    return forbidden
   }
 
   /**
@@ -112,7 +133,7 @@ export class AdjustmentEngine {
 
     // P0: 同班同日互换
     if (this.config.enableP0) {
-      const p0Suggestions = findSameDaySwaps(targetCell, classCells)
+      const p0Suggestions = findSameDaySwaps(targetCell, classCells, undefined, this.subjectForbiddenSlots)
         .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
 
@@ -121,7 +142,7 @@ export class AdjustmentEngine {
 
     // P1: 同班跨日互换
     if (this.config.enableP1 && allSuggestions.length < this.config.maxSuggestions) {
-      const p1Suggestions = findCrossDaySwaps(targetCell, classCells)
+      const p1Suggestions = findCrossDaySwaps(targetCell, classCells, undefined, this.subjectForbiddenSlots)
         .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
 

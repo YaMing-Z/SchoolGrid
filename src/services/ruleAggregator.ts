@@ -27,7 +27,7 @@ export interface AggregatedResult {
  * 将极简的二维表解析结果（单纯的映射名单），结合系统的《排课规则树》，自动推导出完整的排课数据实体。
  */
 export function aggregateRulesWithData(input: AggregationInput): AggregatedResult {
-  const { subjectRules, globalTimeRules, teacherLoadRule } = useRuleStore.getState()
+  const { subjectRules, globalTimeRules, teacherLoadRule, teacherTimeRules, subjectTimeRules } = useRuleStore.getState()
 
   const teachersMap = new Map<string, Teacher>()
   const classesMap = new Map<string, SchoolClass>()
@@ -49,10 +49,27 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
     const teacherId = `teacher_${defaultEmployeeId}`
     
     // 提取全局禁排时间（应用于所有教师）
-    const avoidTimeSlots = globalTimeRules.map(rule => ({
+    const globalAvoidSlots = globalTimeRules.map(rule => ({
       dayOfWeek: rule.dayOfWeek,
       period: rule.period
     }))
+
+    // [P0-1 修复] 提取该教师的个人绝对禁排时间（teacherTimeRules.must_not）
+    // teacherTimeRules 中 teacherId 字段存储的是教师姓名（ruleStore 约定）
+    const personalMustNotSlots = teacherTimeRules
+      .filter(r => r.teacherId === name && r.type === 'must_not')
+      .map(r => ({ dayOfWeek: r.dayOfWeek, period: r.period }))
+
+    // 合并全局禁排和个人禁排，去重
+    const avoidTimeSlots = [...globalAvoidSlots]
+    for (const slot of personalMustNotSlots) {
+      const alreadyIncluded = avoidTimeSlots.some(
+        s => s.dayOfWeek === slot.dayOfWeek && s.period === slot.period
+      )
+      if (!alreadyIncluded) {
+        avoidTimeSlots.push(slot)
+      }
+    }
 
     teachersMap.set(name, {
       id: teacherId,
@@ -104,6 +121,11 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
     // 尝试找有没有对应的学科规则
     const rule = subjectRules.find(r => r.subject === a.subject)
 
+    // [P0-2 修复] 从 subjectTimeRules 中提取该学科的固定课位（type === 'fixed'）
+    const fixedSlots = subjectTimeRules
+      .filter(r => r.subject === a.subject && r.type === 'fixed')
+      .map(r => ({ dayOfWeek: r.dayOfWeek, period: r.period }))
+
     const item: CurriculumItem = {
       id: `curr_${classEntity.id}_${a.subject}_${index}`,
       classId: classEntity.id,
@@ -112,7 +134,8 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
       weeklyHours: rule?.weeklyHours || 1, // 如果没配规则，默认 1 节
       isConsecutive: rule?.isConsecutive || false,
       consecutiveCount: rule?.consecutiveCount || 2,
-      priority: 0 // 默认优先级
+      fixedSlots: fixedSlots.length > 0 ? fixedSlots : undefined, // 注入固定课位
+      priority: fixedSlots.length > 0 ? 10 : 0 // 有固定课位的课程优先级更高
     }
 
     curriculumItems.push(item)
@@ -129,6 +152,11 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
         // 如果没有排，默认由班主任上（确保该班有班主任）
         const hrTeacherId = classEntity.homeroomTeacherId
         if (hrTeacherId) {
+          // [P0-2 修复] 班会课同样注入固定课位
+          const meetingFixedSlots = subjectTimeRules
+            .filter(r => r.subject === Subject.Meeting && r.type === 'fixed')
+            .map(r => ({ dayOfWeek: r.dayOfWeek, period: r.period }))
+
           curriculumItems.push({
             id: `curr_${classEntity.id}_meeting_auto`,
             classId: classEntity.id,
@@ -137,7 +165,8 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
             weeklyHours: meetingRule.weeklyHours,
             isConsecutive: meetingRule.isConsecutive,
             consecutiveCount: meetingRule.consecutiveCount,
-            priority: meetingRule.weeklyHours > 0 ? 5 : 0 // 略微提高班会的优先级
+            fixedSlots: meetingFixedSlots.length > 0 ? meetingFixedSlots : undefined, // 注入固定课位
+            priority: meetingFixedSlots.length > 0 ? 15 : (meetingRule.weeklyHours > 0 ? 5 : 0) // 班会固定课位时优先级最高
           })
         }
       }
