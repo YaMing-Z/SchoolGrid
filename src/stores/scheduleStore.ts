@@ -63,6 +63,12 @@ interface ScheduleState {
   exportData: () => string
   importData: (json: string) => void
   resetData: () => void
+
+  // 步骤条流转
+  currentStep: number
+  setStep: (step: number) => void
+  nextStep: () => void
+  prevStep: () => void
 }
 
 const initialState = {
@@ -81,6 +87,7 @@ const initialState = {
   selectedSuggestion: null,
   validationErrors: [],
   validationWarnings: [],
+  currentStep: 0,
 }
 
 export const useScheduleStore = create<ScheduleState>()(
@@ -99,6 +106,10 @@ export const useScheduleStore = create<ScheduleState>()(
       setValidationErrors: (errors) => set({ validationErrors: errors }),
       setValidationWarnings: (warnings) => set({ validationWarnings: warnings }),
       setRawImportData: (data) => set({ rawImportData: data }),
+
+      setStep: (step) => set({ currentStep: Math.max(0, Math.min(3, step)) }),
+      nextStep: () => set((state) => ({ currentStep: Math.min(3, state.currentStep + 1) })),
+      prevStep: () => set((state) => ({ currentStep: Math.max(0, state.currentStep - 1) })),
 
       recalculateRules: () => {
         const { rawImportData } = get()
@@ -267,6 +278,7 @@ export const useScheduleStore = create<ScheduleState>()(
         curriculumItems: state.curriculumItems,
         schedule: state.schedule,
         rawImportData: state.rawImportData,
+        currentStep: state.currentStep,
       }),
     }
   )

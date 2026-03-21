@@ -64,6 +64,17 @@ export function ScheduleGrid() {
       {/* Toolbar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] bg-white">
         <div className="flex items-center gap-4">
+          <button 
+            onClick={() => {
+              useScheduleStore.getState().prevStep()
+              useScheduleStore.getState().setView('rules')
+            }}
+            className="p-2 -ml-2 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-secondary)] rounded-lg transition-colors flex items-center gap-1 text-sm font-medium"
+          >
+            <span>⬅️</span>
+            <span>返回</span>
+          </button>
+          <div className="w-px h-6 bg-[var(--color-border)] mx-1"></div>
           <h2 className="font-serif text-xl font-semibold text-[var(--color-text-primary)]">
             课表管理
           </h2>

@@ -2,9 +2,10 @@ import { useState, useCallback } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { importFromExcel, generateImportTemplate, downloadExcel } from '@/services/excelService'
 import { validateConsistency } from '@/parsers/validators/consistencyValidator'
+import { useRuleStore } from '@/stores/ruleStore'
 
 export function ImportPage() {
-  const { setTeachers, setClasses, setCurriculumItems, setRawImportData, setValidationErrors, setValidationWarnings, generateSchedule } = useScheduleStore()
+  const { setTeachers, setClasses, setCurriculumItems, setRawImportData, setValidationErrors, setValidationWarnings } = useScheduleStore()
   const [isDragging, setIsDragging] = useState(false)
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateConsistency> | null>(null)
@@ -59,6 +60,11 @@ export function ImportPage() {
         setRawImportData(result.rawImportData)
       }
 
+      // 清理因新导入数据结构变化而导致失效的规则
+      const validTeacherIds = result.teachers.map(t => t.id)
+      const validSubjects = Array.from(new Set(result.curriculumItems.map(c => c.subject)))
+      useRuleStore.getState().cleanupInvalidRules(validTeacherIds, validSubjects)
+
       // 验证数据一致性
       const validation = validateConsistency(
         result.teachers,
@@ -99,6 +105,33 @@ export function ImportPage() {
           上传 Excel 文件导入教师、班级和教学计划数据
         </p>
       </div>
+
+      {useScheduleStore.getState().teachers.length > 0 && (
+        <div className="bg-amber-50 rounded-2xl p-6 text-amber-800 border border-amber-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-serif text-xl font-semibold mb-1">清理导入数据</h3>
+              <p className="text-amber-700/80 text-sm">
+                仅清空当前导入的 Excel 数据（教师、班级、教学计划）和排好的课表。<br/>已经为您精心配置的<strong>所有排课规则将被保留</strong>。重新导入数据时会自动清理与新数据冲突的报废规则。
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (confirm('确认清空导入的 Excel 数据和排好的课表吗？排课规则将被保留。')) {
+                  useScheduleStore.getState().resetData()
+                  setValidationResult(null)
+                  setImportStatus('idle')
+                }
+              }}
+              className="px-6 py-3 bg-white text-amber-600 border border-amber-300 rounded-xl font-medium
+                         hover:bg-amber-100 hover:text-amber-700 transition-all duration-200 flex items-center gap-2"
+            >
+              <span>🧹</span>
+              <span>清空导入数据</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Template download */}
       <div className="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] rounded-2xl p-6 text-white">
@@ -247,19 +280,19 @@ export function ImportPage() {
               </div>
             )}
 
-            {/* Generate schedule button */}
+            {/* Next step button */}
             {validationResult.isValid && (
               <div className="pt-4 border-t border-[var(--color-border)]">
                 <button
                   onClick={() => {
-                    generateSchedule()
-                    setValidationResult(null)
+                    useScheduleStore.getState().nextStep()
+                    useScheduleStore.getState().setView('rules')
                   }}
                   className="w-full py-4 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)]
-                               text-white rounded-xl font-medium
+                               text-white rounded-xl font-medium text-lg leading-none
                                hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  🚀 生成课表
+                  下一步：配置排课规则 ➡️
                 </button>
               </div>
             )}
