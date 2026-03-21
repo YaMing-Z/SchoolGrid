@@ -1,6 +1,8 @@
 import { useDroppable } from '@dnd-kit/core'
 import { useDragAdjustment } from './hooks/useDragAdjustment'
-import { AdjustmentPriority } from '@/types/adjustment.types'
+import { useConflictTooltip } from './hooks/useConflictTooltip'
+import { ConflictTooltip } from './ConflictUI'
+import { AdjustmentPriority, ConflictDetail } from '@/types/adjustment.types'
 
 interface DropTargetCellProps {
   dayOfWeek: number
@@ -8,19 +10,9 @@ interface DropTargetCellProps {
   children?: React.ReactNode
 }
 
-// 不可调课原因的映射
-const REASON_LABELS: Record<string, string> = {
-  'same_cell': '原位置',
-  'same_day_only': '仅限同日调换',
-  'teacher_conflict': '教师时间冲突',
-  'subject_forbidden': '学科禁排时段',
-  'fixed_course': '固定课程',
-  'no_cross_day_available': '无可用跨日调换',
-  'teacher_unavailable': '教师不可用'
-}
-
 export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellProps) {
   const { isDragging, getDropTargetInfo, hoveredTarget, setHoveredTarget, draggedCell } = useDragAdjustment()
+  const { tooltip, showTooltip, hideTooltip } = useConflictTooltip()
   
   const targetKey = `${dayOfWeek}_${period}`
   const dropInfo = getDropTargetInfo(dayOfWeek, period)
@@ -42,9 +34,14 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
   })
 
   // 处理鼠标进入事件
-  const handleMouseEnter = () => {
+  const handleMouseEnter = (e: React.MouseEvent) => {
     if (isDragging) {
       setHoveredTarget(targetKey)
+      
+      // 如果有冲突信息，显示Tooltip
+      if (dropInfo && !dropInfo.isValid && dropInfo.violations.length > 0) {
+        showTooltip(dropInfo.violations[0], e)
+      }
     }
   }
 
@@ -52,6 +49,7 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
   const handleMouseLeave = () => {
     if (isDragging && isHovered) {
       setHoveredTarget(null)
+      hideTooltip()
     }
   }
 
@@ -74,7 +72,7 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
 
     if (!dropInfo.isValid) {
       // 不可行 - 红色虚线
-      return 'border-2 border-dotted border-red-400 bg-red-50'
+      return 'border-2 border-dotted border-red-400 bg-red-50 cursor-help'
     }
 
     // 根据优先级设置样式
@@ -141,9 +139,9 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
     // 可行的不显示原因
     if (dropInfo?.isValid) return null
     
-    // 有 dropInfo但不可行 - 显示违规原因
+    // 有 dropInfo但不可行 - 显示违规原因（使用新的 ConflictDetail 类型）
     if (dropInfo && !dropInfo.isValid && dropInfo.violations.length > 0) {
-      const reason = dropInfo.violations.map((v: string) => REASON_LABELS[v] || v).join('、')
+      const reason = dropInfo.violations.map((v: ConflictDetail) => v.message).join('、')
       return (
         <div className="absolute inset-0 flex items-center justify-center z-10 p-1">
           <span className="text-[10px] text-red-600 font-medium text-center leading-tight">{reason}</span>
@@ -156,10 +154,10 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
       let reason = ''
       // 检查是否是同一天（P0应该覆盖但没有）
       if (draggedCell && draggedCell.dayOfWeek === dayOfWeek) {
-        reason = REASON_LABELS['teacher_conflict']
+        reason = '教师时间冲突'
       } else {
         // 跨日位置没有建议
-        reason = REASON_LABELS['teacher_unavailable']
+        reason = '教师不可用'
       }
       
       return (
@@ -172,20 +170,39 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
     return null
   }
 
+  // 获取主要冲突信息（用于Tooltip）
+  const getPrimaryConflict = () => {
+    if (!dropInfo || dropInfo.isValid || dropInfo.violations.length === 0) {
+      return null
+    }
+    return dropInfo.violations[0]
+  }
+
   return (
-    <div
-      ref={setNodeRef}
-      className={`
-        relative p-3 min-h-[80px] transition-all duration-200
-        ${getCellStyles()}
-      `}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {children}
-      {renderScore()}
-      {renderPriorityLabel()}
-      {renderInvalidReason()}
-    </div>
+    <>
+      <div
+        ref={setNodeRef}
+        className={`
+          relative p-3 min-h-[80px] transition-all duration-200
+          ${getCellStyles()}
+        `}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        title={getPrimaryConflict() ? '悬停查看详情' : undefined}
+      >
+        {children}
+        {renderScore()}
+        {renderPriorityLabel()}
+        {renderInvalidReason()}
+      </div>
+      
+      {/* 冲突详情Tooltip */}
+      <ConflictTooltip
+        visible={tooltip.visible}
+        conflict={tooltip.conflict}
+        position={tooltip.position}
+        onClose={hideTooltip}
+      />
+    </>
   )
 }

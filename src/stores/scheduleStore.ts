@@ -4,11 +4,26 @@ import { Teacher } from '@/types/teacher.types'
 import { SchoolClass } from '@/types/class.types'
 import { CurriculumItem } from '@/types/curriculum.types'
 import { SchoolSchedule, ScheduleCell } from '@/types/schedule.types'
-import { AdjustmentSuggestion, AdjustmentRequest, AdjustmentType, AdjustmentStatus, AdjustmentPriority, ScheduleOperation, AdjustmentImpact } from '@/types/adjustment.types'
+import { AdjustmentSuggestion, AdjustmentRequest, AdjustmentType, AdjustmentStatus, AdjustmentPriority, ScheduleOperation, AdjustmentImpact, ConflictDetail, AdjustmentConflictType, VIOLATION_CODE_TO_CONFLICT_TYPE, REASON_LABELS } from '@/types/adjustment.types'
 import { runGreedyScheduler } from '@/algorithms/scheduler/greedyScheduler'
 import { AdjustmentEngine } from '@/algorithms/adjustment'
 import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
 import { useRuleStore } from '@/stores/ruleStore'
+
+/**
+ * 将旧版错误码数组转换为结构化冲突详情
+ */
+function convertViolationsToConflictDetails(violations: string[]): ConflictDetail[] {
+  return violations.map(code => {
+    const conflictType = VIOLATION_CODE_TO_CONFLICT_TYPE[code] || AdjustmentConflictType.SameCell
+    return {
+      type: conflictType,
+      severity: 'error' as const,
+      message: REASON_LABELS[code] || code,
+      details: { reason: code }
+    }
+  })
+}
 
 export type ViewMode = 'dashboard' | 'schedule' | 'import' | 'rules'
 export type ScheduleViewType = 'class' | 'teacher'
@@ -24,10 +39,10 @@ export interface DropTargetInfo {
   priority: AdjustmentPriority | null
   score: number
   isValid: boolean
-  violations: string[]
+  violations: ConflictDetail[]  // 改进：从 string[] 改为结构化冲突详情
   operations: ScheduleOperation[]
-  impact?: AdjustmentImpact  // 新增：影响信息
-  description?: string  // 新增：建议描述
+  impact?: AdjustmentImpact
+  description?: string
 }
 
 // 调课方案（建议模式使用）
@@ -38,10 +53,10 @@ export interface AdjustmentProposal {
   targetCell: ScheduleCell | null  // null表示空白格子
   priority: AdjustmentPriority
   score: number
-  violations: string[]
+  violations: ConflictDetail[]  // 改进：从 string[] 改为结构化冲突详情
   operations: ScheduleOperation[]
-  impact?: AdjustmentImpact  // 新增：影响信息
-  description?: string  // 新增：建议描述
+  impact?: AdjustmentImpact
+  description?: string
   createdAt: Date
 }
 
@@ -310,17 +325,8 @@ export const useScheduleStore = create<ScheduleState>()(
       setAdjustmentModeType: (mode) => set({ adjustmentModeType: mode }),
 
       startDrag: (cell) => {
-        const { teachers, schedule } = get()
+        const { teachers, classes, schedule } = get()
         if (!schedule) return
-
-        console.log('[startDrag] Starting drag for cell:', {
-          cellId: cell.id,
-          subject: cell.subject,
-          teacherId: cell.teacherId,
-          classId: cell.classId,
-          dayOfWeek: cell.dayOfWeek,
-          period: cell.period
-        })
 
         // 计算所有可能的放置目标
         const engine = new AdjustmentEngine(teachers, schedule)
@@ -337,35 +343,143 @@ export const useScheduleStore = create<ScheduleState>()(
 
         const suggestions = engine.generateSuggestions(request)
         
-        console.log('[startDrag] Generated suggestions:', {
-          total: suggestions.length,
-          byPriority: {
-            p0: suggestions.filter(s => s.priority === 0).length,
-            p1: suggestions.filter(s => s.priority === 1).length,
-            p2: suggestions.filter(s => s.priority === 2).length
-          },
-          suggestions: suggestions.map(s => ({
-            id: s.id,
-            priority: s.priority,
-            description: s.description,
-            operations: s.operations.map(op => ({ type: op.type, cellId: op.cellId, toSlot: op.toSlot }))
-          }))
-        })
-        
         // 构建dropTargets Map
         // 只使用第一个操作的toSlot作为拖拽目标（即被拖拽课程的新位置）
         const dropTargets = new Map<string, DropTargetInfo>()
         
-        // 首先添加所有可行的建议
+        // 构建教师占用情况表（用于分析不可行位置）
+        const teacherOccupancy = new Map<string, { dayOfWeek: number; period: number; classId: string; subject: string }>()
+        for (const classSchedule of schedule.classSchedules) {
+          for (const c of classSchedule.cells) {
+            if (c.teacherId === cell.teacherId && c.id !== cell.id) {
+              teacherOccupancy.set(`${c.dayOfWeek}_${c.period}`, {
+                dayOfWeek: c.dayOfWeek,
+                period: c.period,
+                classId: classSchedule.classId,
+                subject: c.subject
+              })
+            }
+          }
+        }
+        
+        // 为所有可能的时段生成冲突分析（周一到周五，1-8节）
+        const DAYS = [1, 2, 3, 4, 5]
+        const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
+        
+        for (const day of DAYS) {
+          for (const period of PERIODS) {
+            const targetKey = `${day}_${period}`
+            
+            // 跳过原位置
+            if (day === cell.dayOfWeek && period === cell.period) {
+              dropTargets.set(targetKey, {
+                cellId: targetKey,
+                dayOfWeek: day,
+                period: period,
+                priority: null,
+                score: 0,
+                isValid: false,
+                violations: [{
+                  type: AdjustmentConflictType.SameCell,
+                  severity: 'info',
+                  message: '原位置',
+                  details: { reason: 'same_cell' }
+                }],
+                operations: []
+              })
+              continue
+            }
+            
+            // 检查教师是否在该时段有课
+            const teacherBusy = teacherOccupancy.get(targetKey)
+            if (teacherBusy) {
+              dropTargets.set(targetKey, {
+                cellId: targetKey,
+                dayOfWeek: day,
+                period: period,
+                priority: null,
+                score: 0,
+                isValid: false,
+                violations: [{
+                  type: AdjustmentConflictType.TeacherBusy,
+                  severity: 'error',
+                  message: `${teachers.find(t => t.id === cell.teacherId)?.name || '教师'}在${classes.find(c => c.id === teacherBusy.classId)?.name || '某班级'}有${teacherBusy.subject}课`,
+                  details: {
+                    teacherId: cell.teacherId,
+                    teacherName: teachers.find(t => t.id === cell.teacherId)?.name || '教师',
+                    busySlot: {
+                      dayOfWeek: day,
+                      period: period,
+                      dayName: ['','周一','周二','周三','周四','周五'][day],
+                      periodName: `第${period}节`
+                    },
+                    busyWith: {
+                      className: classes.find(c => c.id === teacherBusy.classId)?.name || '某班级',
+                      subject: teacherBusy.subject
+                    }
+                  },
+                  suggestion: '可尝试选择其他时段，或与该班级协调调课'
+                }],
+                  operations: []
+                })
+              } else {
+                // 教师没有在该时段有课，但也没有可行的建议
+                // 分析具体原因并提供更有意义的提示
+                const targetCellDay = cell.dayOfWeek
+                const isSameDay = day === targetCellDay
+                
+                let conflictMessage = ''
+                let conflictType = AdjustmentConflictType.TeacherUnavailable
+                let suggestionTip = ''
+                
+                if (isSameDay) {
+                  // 同一天但没有可互换的课程
+                  conflictMessage = '当天无其他课程可互换'
+                  suggestionTip = '该教师当天只有这一节课，无法进行同日互换'
+                } else {
+                  // 跨日但没有可互换的课程
+                  conflictMessage = '目标时段无课程可互换'
+                  suggestionTip = '该时段为空，无法进行课程互换。可尝试拖拽到有课程的位置进行交换'
+                }
+                
+                dropTargets.set(targetKey, {
+                  cellId: targetKey,
+                  dayOfWeek: day,
+                  period: period,
+                  priority: null,
+                  score: 0,
+                  isValid: false,
+                  violations: [{
+                    type: conflictType,
+                    severity: 'warning',
+                    message: conflictMessage,
+                    details: {
+                      reason: 'no_swap_target',
+                      isSameDay,
+                      targetDay: day,
+                      targetPeriod: period,
+                      teacherName: teachers.find(t => t.id === cell.teacherId)?.name || '教师'
+                    },
+                    suggestion: suggestionTip
+                  }],
+                  operations: []
+                })
+              }
+            }
+          }
+        
+        // 添加所有可行的建议（会覆盖上面的冲突分析）
         for (const suggestion of suggestions) {
           // 找到涉及被拖拽单元格的操作（cellId匹配被拖拽单元格）
           const targetOp = suggestion.operations.find(op => op.cellId === cell.id)
+          
           if (targetOp && targetOp.toSlot) {
             const targetKey = `${targetOp.toSlot.dayOfWeek}_${targetOp.toSlot.period}`
             
             // 检查是否已有更高优先级的建议
             const existing = dropTargets.get(targetKey)
-            if (!existing || suggestion.priority < existing.priority!) {
+            
+            if (!existing || existing.priority === null || suggestion.priority < existing.priority) {
               dropTargets.set(targetKey, {
                 cellId: targetKey,
                 dayOfWeek: targetOp.toSlot.dayOfWeek as number,
@@ -373,7 +487,7 @@ export const useScheduleStore = create<ScheduleState>()(
                 priority: suggestion.priority,
                 score: suggestion.score,
                 isValid: suggestion.isValid,
-                violations: suggestion.violations,
+                violations: convertViolationsToConflictDetails(suggestion.violations),
                 operations: suggestion.operations,
                 impact: suggestion.impact,
                 description: suggestion.description
@@ -382,20 +496,11 @@ export const useScheduleStore = create<ScheduleState>()(
           }
         }
 
-        console.log('[startDrag] Drop targets built:', {
-          count: dropTargets.size,
-          targets: Array.from(dropTargets.entries()).map(([key, info]) => ({
-            key,
-            priority: info.priority,
-            isValid: info.isValid,
-            description: info.description
-          }))
-        })
-
+        // 创建新的Map以触发Zustand状态更新（浅比较需要新引用）
         set({
           isDragging: true,
           draggedCell: cell,
-          dropTargets
+          dropTargets: new Map(dropTargets)
         })
       },
 

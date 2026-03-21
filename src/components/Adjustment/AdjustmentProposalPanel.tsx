@@ -187,7 +187,7 @@ ${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.
               <div className="text-sm font-medium text-yellow-700 mb-1">⚠️ 注意事项</div>
               <ul className="text-xs text-yellow-600 space-y-1">
                 {currentProposal.violations.map((v, i) => (
-                  <li key={i}>• {v}</li>
+                  <li key={i}>• {v.message}{v.suggestion && ` - ${v.suggestion}`}</li>
                 ))}
               </ul>
             </div>
