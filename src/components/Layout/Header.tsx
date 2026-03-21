@@ -1,4 +1,5 @@
 import { useScheduleStore } from '@/stores/scheduleStore'
+import { useRuleStore } from '@/stores/ruleStore'
 import { ViewMode } from '@/stores/scheduleStore'
 
 const navItems: { id: ViewMode; label: string; icon: string }[] = [
@@ -69,8 +70,26 @@ export function Header() {
               </div>
             )}
 
-            {/* Export button */}
-            <button
+            <div className="flex items-center gap-2">
+              {/* Clear button */}
+              <button
+                onClick={() => {
+                  if (confirm('确认彻底清除所有导入的系统数据、课表和本地保存的规则信息吗？此操作不可恢复。')) {
+                    useScheduleStore.getState().resetData()
+                    useRuleStore.getState().resetRules()
+                    setView('dashboard')
+                  }
+                }}
+                className="px-4 py-2 rounded-lg border border-[var(--color-error)] text-[var(--color-error)] text-sm font-medium
+                           hover:bg-red-50 transition-colors duration-200
+                           flex items-center gap-2 shadow-sm"
+              >
+                <span>🗑️</span>
+                <span>清除所有数据</span>
+              </button>
+
+              {/* Export button */}
+              <button
               onClick={() => {
                 const data = useScheduleStore.getState().exportData()
                 const blob = new Blob([data], { type: 'application/json' })
@@ -88,6 +107,7 @@ export function Header() {
               <span>📤</span>
               <span>导出</span>
             </button>
+            </div>
           </div>
         </div>
       </div>

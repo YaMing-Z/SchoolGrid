@@ -1,5 +1,6 @@
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { SUBJECT_NAMES, Subject } from '@/data/constants'
+import { Stepper } from '@/components/Layout/Stepper'
 
 const statCards = [
   { key: 'teachers', label: '教师总数', icon: '👨‍🏫', color: 'from-blue-500 to-blue-600' },
@@ -9,7 +10,7 @@ const statCards = [
 ]
 
 export function DashboardPage() {
-  const { teachers, classes, curriculumItems, schedule, setView, generateSchedule } = useScheduleStore()
+  const { teachers, classes, curriculumItems, schedule, setView } = useScheduleStore()
 
   const stats = {
     teachers: teachers.length,
@@ -26,8 +27,45 @@ export function DashboardPage() {
 
   const hasData = teachers.length > 0 && classes.length > 0 && curriculumItems.length > 0
 
+  if (!hasData) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 bg-[var(--color-bg-secondary)] animate-fade-in relative overflow-hidden">
+        {/* Decorative background elements */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-[var(--color-primary)]/5 to-[var(--color-accent)]/5 rounded-full blur-3xl -z-10"></div>
+        
+        <div className="text-center max-w-2xl mb-12">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] flex items-center justify-center shadow-xl mb-6 shadow-[var(--color-primary)]/20 rotate-[10deg] hover:rotate-0 transition-transform duration-500">
+            <span className="text-white text-4xl">S</span>
+          </div>
+          <h1 className="font-serif text-4xl font-bold text-[var(--color-text-primary)] mb-4">
+            欢迎来到 SchoolGrid 智能排课系统
+          </h1>
+          <p className="text-lg text-[var(--color-text-secondary)] leading-relaxed">
+            仅需四个简单步骤，即可生成全校最优课表。您可以在任意时刻回到此向导查看当前进度。
+          </p>
+        </div>
+
+        <div className="w-full max-w-4xl bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white p-2 mb-12">
+          <div className="bg-transparent rounded-2xl overflow-hidden">
+            <Stepper currentStep={0} />
+          </div>
+        </div>
+
+        <button
+          onClick={() => setView('import')}
+          className="group relative px-10 py-4 bg-[var(--color-primary)] text-white rounded-2xl font-semibold text-lg overflow-hidden shadow-xl shadow-[var(--color-primary)]/30 hover:shadow-2xl hover:shadow-[var(--color-primary)]/40 hover:-translate-y-1 transition-all duration-300 flex items-center gap-3"
+        >
+          <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+          <span className="relative text-2xl">📥</span>
+          <span className="relative">开始第一步：导入数据</span>
+          <span className="relative group-hover:translate-x-1 transition-transform">➡️</span>
+        </button>
+      </div>
+    )
+  }
+
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-8 animate-fade-in">
+    <div className="p-6 max-w-[1400px] mx-auto space-y-8 animate-fade-in h-full overflow-y-auto">
       {/* Page header */}
       <div className="flex items-end justify-between">
         <div>
@@ -38,20 +76,9 @@ export function DashboardPage() {
             查看数据统计和快速操作
           </p>
         </div>
-        {!hasData && (
-          <button
-            onClick={() => setView('import')}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)]
-                       text-white font-medium shadow-md hover:shadow-lg transition-all duration-300
-                       flex items-center gap-2"
-          >
-            <span>📥</span>
-            <span>导入数据</span>
-          </button>
-        )}
         {hasData && !schedule && (
           <button
-            onClick={generateSchedule}
+            onClick={() => useScheduleStore.getState().generateSchedule()}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-light)]
                        text-white font-medium shadow-md hover:shadow-lg transition-all duration-300
                        flex items-center gap-2"

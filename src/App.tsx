@@ -14,7 +14,7 @@ function App() {
     <div className="min-h-screen flex flex-col">
       <Header />
 
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-hidden bg-[var(--color-bg-secondary)]">
         {currentView === 'dashboard' && <DashboardPage />}
         {currentView === 'import' && <ImportPage />}
         {currentView === 'schedule' && <ScheduleGrid />}
@@ -25,7 +25,7 @@ function App() {
       {adjustmentMode && <AdjustmentPanel />}
 
       {/* Footer */}
-      <footer className="py-4 text-center text-xs text-[var(--color-text-muted)] border-t border-[var(--color-border-light)]">
+      <footer className="py-4 text-center text-xs text-[var(--color-text-muted)] border-t border-[var(--color-border-light)] bg-white">
         <p>
           SchoolGrid 智能排课系统 · 基于贪心算法与三级优先级调课策略
         </p>
