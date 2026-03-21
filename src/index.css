@@ -1,0 +1,205 @@
+/* 引入 Noto Sans SC 作为主字体，Noto Serif SC 作为标题字体 */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 主色调 - 温暖的蓝灰色系 */
+  --color-primary: #4f6d8a;
+  --color-primary-light: #6b7fa3;
+  --color-primary-dark: #3d5470;
+
+  /* 强调色 */
+  --color-accent: #e07a5f;
+  --color-accent-light: #f09a85;
+
+  /* 背景色 */
+  --color-bg-primary: #faf9f7;
+  --color-bg-secondary: #f4f2ef;
+  --color-bg-tertiary: #eae7e3;
+
+  /* 文字色 */
+  --color-text-primary: #2d3142;
+  --color-text-secondary: #5c6378;
+  --color-text-muted: #8b9ab0;
+
+  /* 边框色 */
+  --color-border: #e5e2dd;
+  --color-border-light: #f0ede8;
+
+  /* 状态色 */
+  --color-success: #4caf7c;
+  --color-warning: #f5a623;
+  --color-error: #e05252;
+  --color-info: #5c9cf5;
+
+  /* 优先级色 */
+  --color-p0: #4caf7c;
+  --color-p1: #5c9cf5;
+  --color-p2: #f5a623;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(45, 49, 66, 0.04);
+  --shadow-md: 0 4px 12px rgba(45, 49, 66, 0.08);
+  --shadow-lg: 0 8px 24px rgba(45, 49, 66, 0.12);
+  --shadow-xl: 0 16px 48px rgba(45, 49, 66, 0.16);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* 字体 */
+  --font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: 'Noto Serif SC', Georgia, serif;
+
+  /* 动画 */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 0% 0%, rgba(79, 109, 138, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 100%, rgba(224, 122, 95, 0.03) 0%, transparent 50%),
+    var(--color-bg-primary);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn var(--transition-base) ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp var(--transition-base) ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight var(--transition-base) ease-out forwards;
+}
+
+/* 实用类 */
+.text-balance {
+  text-wrap: balance;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* 优先级徽章动画 */
+.priority-badge {
+  position: relative;
+  overflow: hidden;
+}
+
+.priority-badge::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2s infinite;
+}
+
+/* 课表单元格悬停效果 */
+.schedule-cell {
+  transition: all var(--transition-fast);
+}
+
+.schedule-cell:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* 网格背景纹理 */
+.grid-texture {
+  background-image:
+    linear-gradient(var(--color-border-light) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-light) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
