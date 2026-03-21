@@ -1,7 +1,5 @@
 import { useDroppable } from '@dnd-kit/core'
 import { useDragAdjustment } from './hooks/useDragAdjustment'
-import { useConflictTooltip } from './hooks/useConflictTooltip'
-import { ConflictTooltip } from './ConflictUI'
 import { AdjustmentPriority, ConflictDetail } from '@/types/adjustment.types'
 
 interface DropTargetCellProps {
@@ -11,8 +9,7 @@ interface DropTargetCellProps {
 }
 
 export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellProps) {
-  const { isDragging, getDropTargetInfo, hoveredTarget, setHoveredTarget, draggedCell } = useDragAdjustment()
-  const { tooltip, showTooltip, hideTooltip } = useConflictTooltip()
+  const { isDragging, getDropTargetInfo, hoveredTarget, setHoveredTarget, draggedCell, showTooltip, hideTooltip } = useDragAdjustment()
   
   const targetKey = `${dayOfWeek}_${period}`
   const dropInfo = getDropTargetInfo(dayOfWeek, period)
@@ -179,30 +176,20 @@ export function DropTargetCell({ dayOfWeek, period, children }: DropTargetCellPr
   }
 
   return (
-    <>
-      <div
-        ref={setNodeRef}
-        className={`
-          relative p-3 min-h-[80px] transition-all duration-200
-          ${getCellStyles()}
-        `}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        title={getPrimaryConflict() ? '悬停查看详情' : undefined}
-      >
-        {children}
-        {renderScore()}
-        {renderPriorityLabel()}
-        {renderInvalidReason()}
-      </div>
-      
-      {/* 冲突详情Tooltip */}
-      <ConflictTooltip
-        visible={tooltip.visible}
-        conflict={tooltip.conflict}
-        position={tooltip.position}
-        onClose={hideTooltip}
-      />
-    </>
+    <div
+      ref={setNodeRef}
+      className={`
+        relative p-3 min-h-[80px] transition-all duration-200
+        ${getCellStyles()}
+      `}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      title={getPrimaryConflict() ? '悬停查看详情' : undefined}
+    >
+      {children}
+      {renderScore()}
+      {renderPriorityLabel()}
+      {renderInvalidReason()}
+    </div>
   )
 }

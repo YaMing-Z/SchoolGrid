@@ -5,6 +5,7 @@ import { SUBJECT_NAMES, SUBJECT_COLORS } from '@/data/constants'
 import { DraggableCourse } from './DraggableCourse'
 import { DropTargetCell } from './DropTargetCell'
 import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentProposalPanel'
+import { ConflictTooltip } from './ConflictUI'
 import { useState } from 'react'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
@@ -26,7 +27,9 @@ export function ScheduleGrid() {
     setAdjustmentModeType,
     isDragging,
     draggedCell,
-    currentProposal
+    currentProposal,
+    tooltipState,
+    hideTooltip
   } = useScheduleStore()
 
   const [activeCell, setActiveCell] = useState<ScheduleCell | null>(null)
@@ -331,6 +334,14 @@ export function ScheduleGrid() {
 
       {/* 建议模式的方案面板 */}
       {currentProposal && <AdjustmentProposalPanel />}
+
+      {/* 全局冲突提示Tooltip */}
+      <ConflictTooltip
+        visible={tooltipState.visible}
+        conflict={tooltipState.conflict}
+        position={tooltipState.position}
+        onClose={hideTooltip}
+      />
     </DndContext>
   )
 }

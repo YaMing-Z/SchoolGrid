@@ -1,5 +1,55 @@
 import { useScheduleStore, DropTargetInfo } from '@/stores/scheduleStore'
-import { useMemo } from 'react'
+import { useMemo, useCallback } from 'react'
+import { ConflictDetail } from '@/types/adjustment.types'
+
+// Tooltip 位置计算常量
+const TOOLTIP_SIZE = { width: 288, height: 200 }
+const OFFSET = 12
+const PADDING = 16
+
+/**
+ * 计算Tooltip的智能位置
+ */
+function calculateTooltipPosition(
+  targetRect: DOMRect,
+  viewport: { width: number; height: number }
+): { x: number; y: number; placement: 'top' | 'bottom' | 'left' | 'right' } {
+  const { width: tw, height: th } = TOOLTIP_SIZE
+  
+  const spaceRight = viewport.width - targetRect.right - OFFSET
+  const spaceLeft = targetRect.left - OFFSET
+  const spaceBottom = viewport.height - targetRect.bottom - OFFSET
+  
+  if (spaceRight >= tw) {
+    return {
+      x: targetRect.right + OFFSET,
+      y: Math.min(targetRect.top, viewport.height - th - PADDING),
+      placement: 'right'
+    }
+  }
+  
+  if (spaceLeft >= tw) {
+    return {
+      x: targetRect.left - tw - OFFSET,
+      y: Math.min(targetRect.top, viewport.height - th - PADDING),
+      placement: 'left'
+    }
+  }
+  
+  if (spaceBottom >= th) {
+    return {
+      x: Math.max(PADDING, Math.min(targetRect.left, viewport.width - tw - PADDING)),
+      y: targetRect.bottom + OFFSET,
+      placement: 'bottom'
+    }
+  }
+  
+  return {
+    x: Math.max(PADDING, Math.min(targetRect.left, viewport.width - tw - PADDING)),
+    y: Math.max(PADDING, targetRect.top - th - OFFSET),
+    placement: 'top'
+  }
+}
 
 /**
  * 拖拽调课Hook
@@ -13,13 +63,16 @@ export function useDragAdjustment() {
     hoveredTarget,
     adjustmentModeType,
     currentProposal,
+    tooltipState,
     startDrag,
     endDrag,
     setHoveredTarget,
     applyDragAdjustment,
     createProposal,
     clearProposal,
-    setAdjustmentModeType
+    setAdjustmentModeType,
+    showTooltip,
+    hideTooltip
   } = useScheduleStore()
 
   // 计算放置目标的数组形式（便于遍历）
@@ -74,6 +127,24 @@ export function useDragAdjustment() {
     }
   }
 
+  // 显示冲突 Tooltip（使用全局状态）
+  const showConflictTooltip = useCallback((
+    conflict: ConflictDetail,
+    event: React.MouseEvent | { clientX: number; clientY: number; target: EventTarget | null }
+  ) => {
+    const target = event.target as HTMLElement
+    if (!target) return
+    
+    const rect = target.getBoundingClientRect()
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+    
+    const position = calculateTooltipPosition(rect, viewport)
+    showTooltip(conflict, position)
+  }, [showTooltip])
+
   return {
     // 状态
     isDragging,
@@ -83,6 +154,7 @@ export function useDragAdjustment() {
     hoveredTarget,
     adjustmentModeType,
     currentProposal,
+    tooltipState,
     
     // 方法
     startDrag,
@@ -92,6 +164,8 @@ export function useDragAdjustment() {
     createProposal,
     clearProposal,
     setAdjustmentModeType,
+    showTooltip: showConflictTooltip,
+    hideTooltip,
     
     // 辅助方法
     getDropTargetInfo,

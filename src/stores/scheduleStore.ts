@@ -60,6 +60,13 @@ export interface AdjustmentProposal {
   createdAt: Date
 }
 
+// Tooltip 状态接口
+export interface TooltipState {
+  visible: boolean
+  conflict: ConflictDetail | null
+  position: { x: number; y: number; placement: 'top' | 'bottom' | 'left' | 'right' }
+}
+
 interface ScheduleState {
   // 数据
   teachers: Teacher[]
@@ -87,6 +94,9 @@ interface ScheduleState {
   dropTargets: Map<string, DropTargetInfo>
   hoveredTarget: string | null
   currentProposal: AdjustmentProposal | null
+
+  // Tooltip 状态（全局）
+  tooltipState: TooltipState
 
   // 验证状态
   validationErrors: string[]
@@ -124,6 +134,10 @@ interface ScheduleState {
   createProposal: (targetCellId: string) => void
   clearProposal: () => void
 
+  // Tooltip 操作
+  showTooltip: (conflict: ConflictDetail, position: { x: number; y: number; placement: 'top' | 'bottom' | 'left' | 'right' }) => void
+  hideTooltip: () => void
+
   // 数据持久化
   exportData: () => string
   importData: (json: string) => void
@@ -134,6 +148,12 @@ interface ScheduleState {
   setStep: (step: number) => void
   nextStep: () => void
   prevStep: () => void
+}
+
+const initialTooltipState: TooltipState = {
+  visible: false,
+  conflict: null,
+  position: { x: 0, y: 0, placement: 'right' }
 }
 
 const initialState = {
@@ -160,6 +180,8 @@ const initialState = {
   dropTargets: new Map<string, DropTargetInfo>(),
   hoveredTarget: null,
   currentProposal: null,
+  // Tooltip 状态
+  tooltipState: initialTooltipState,
 }
 
 export const useScheduleStore = create<ScheduleState>()(
@@ -610,6 +632,22 @@ export const useScheduleStore = create<ScheduleState>()(
         draggedCell: null,
         dropTargets: new Map(),
         hoveredTarget: null
+      }),
+
+      // Tooltip 操作
+      showTooltip: (conflict, position) => set({
+        tooltipState: {
+          visible: true,
+          conflict,
+          position
+        }
+      }),
+
+      hideTooltip: () => set({
+        tooltipState: {
+          ...get().tooltipState,
+          visible: false
+        }
       }),
 
       exportData: () => {
