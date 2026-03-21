@@ -4,7 +4,7 @@ import { importFromExcel, generateImportTemplate, downloadExcel } from '@/servic
 import { validateConsistency } from '@/parsers/validators/consistencyValidator'
 
 export function ImportPage() {
-  const { setTeachers, setClasses, setCurriculumItems, setValidationErrors, setValidationWarnings, generateSchedule } = useScheduleStore()
+  const { setTeachers, setClasses, setCurriculumItems, setRawImportData, setValidationErrors, setValidationWarnings, generateSchedule } = useScheduleStore()
   const [isDragging, setIsDragging] = useState(false)
   const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [validationResult, setValidationResult] = useState<ReturnType<typeof validateConsistency> | null>(null)
@@ -55,6 +55,9 @@ export function ImportPage() {
       setTeachers(result.teachers)
       setClasses(result.classes)
       setCurriculumItems(result.curriculumItems)
+      if (result.rawImportData) {
+        setRawImportData(result.rawImportData)
+      }
 
       // 验证数据一致性
       const validation = validateConsistency(

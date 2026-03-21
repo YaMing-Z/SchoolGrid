@@ -7,6 +7,8 @@ import { SchoolSchedule, ScheduleCell } from '@/types/schedule.types'
 import { AdjustmentSuggestion, AdjustmentRequest, AdjustmentType, AdjustmentStatus } from '@/types/adjustment.types'
 import { runGreedyScheduler } from '@/algorithms/scheduler/greedyScheduler'
 import { AdjustmentEngine } from '@/algorithms/adjustment'
+import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
+import { useRuleStore } from '@/stores/ruleStore'
 
 export type ViewMode = 'dashboard' | 'schedule' | 'import' | 'rules'
 export type ScheduleViewType = 'class' | 'teacher'
@@ -16,6 +18,7 @@ interface ScheduleState {
   teachers: Teacher[]
   classes: SchoolClass[]
   curriculumItems: CurriculumItem[]
+  rawImportData: AggregationInput | null
   schedule: SchoolSchedule | null
 
   // UI 状态
@@ -45,6 +48,8 @@ interface ScheduleState {
   setScheduleViewType: (type: ScheduleViewType) => void
   setValidationErrors: (errors: string[]) => void
   setValidationWarnings: (warnings: string[]) => void
+  setRawImportData: (data: AggregationInput | null) => void
+  recalculateRules: () => void
 
   // 业务操作
   generateSchedule: () => void
@@ -64,6 +69,7 @@ const initialState = {
   teachers: [],
   classes: [],
   curriculumItems: [],
+  rawImportData: null,
   schedule: null,
   currentView: 'dashboard' as ViewMode,
   selectedClassId: null,
@@ -92,8 +98,23 @@ export const useScheduleStore = create<ScheduleState>()(
       setScheduleViewType: (type) => set({ scheduleViewType: type }),
       setValidationErrors: (errors) => set({ validationErrors: errors }),
       setValidationWarnings: (warnings) => set({ validationWarnings: warnings }),
+      setRawImportData: (data) => set({ rawImportData: data }),
+
+      recalculateRules: () => {
+        const { rawImportData } = get()
+        if (rawImportData) {
+          const aggregatedResult = aggregateRulesWithData(rawImportData)
+          set({
+            teachers: aggregatedResult.teachers,
+            classes: aggregatedResult.classes,
+            curriculumItems: aggregatedResult.curriculumItems,
+          })
+        }
+      },
 
       generateSchedule: () => {
+        get().recalculateRules()
+
         const { teachers, classes, curriculumItems } = get()
         if (teachers.length === 0 || classes.length === 0 || curriculumItems.length === 0) {
           set({ validationErrors: ['请先导入教师、班级和教学计划数据'] })
@@ -245,7 +266,13 @@ export const useScheduleStore = create<ScheduleState>()(
         classes: state.classes,
         curriculumItems: state.curriculumItems,
         schedule: state.schedule,
+        rawImportData: state.rawImportData,
       }),
     }
   )
 )
+
+// 订阅规则库的变化，任何排课规则改变时，自动重新聚合计算内存中的课表元数据
+useRuleStore.subscribe(() => {
+  useScheduleStore.getState().recalculateRules()
+})
