@@ -5,30 +5,7 @@ import { ImportPage } from '@/components/Pages/ImportPage'
 import { ScheduleGrid } from '@/components/Schedule/ScheduleGrid'
 import { AdjustmentPanel } from '@/components/Adjustment/AdjustmentPanel'
 
-function RulesPage() {
-  return (
-    <div className="p-6 max-w-[1000px] mx-auto animate-fade-in">
-      <div className="flex items-end justify-between mb-8">
-        <div>
-          <h2 className="font-serif text-3xl font-semibold text-[var(--color-text-primary)]">
-            规则设置
-          </h2>
-          <p className="text-[var(--color-text-secondary)] mt-1">
-            配置排课约束和优先级规则
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-border-light)] p-6">
-        <div className="flex flex-col items-center justify-center py-16 text-[var(--color-text-muted)]">
-          <span className="text-6xl mb-4">⚙️</span>
-          <p className="text-lg mb-2">规则引擎开发中</p>
-          <p className="text-sm">即将支持时间约束、频率约束、并发约束等高级规则配置</p>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { RuleConfigPage } from '@/components/Pages/RuleConfigPage'
 
 function App() {
   const { currentView, adjustmentMode } = useScheduleStore()
@@ -41,7 +18,7 @@ function App() {
         {currentView === 'dashboard' && <DashboardPage />}
         {currentView === 'import' && <ImportPage />}
         {currentView === 'schedule' && <ScheduleGrid />}
-        {currentView === 'rules' && <RulesPage />}
+        {currentView === 'rules' && <RuleConfigPage />}
       </main>
 
       {/* Adjustment panel overlay */}

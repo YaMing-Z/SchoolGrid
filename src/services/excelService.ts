@@ -3,104 +3,67 @@ import { Teacher } from '@/types/teacher.types'
 import { SchoolClass } from '@/types/class.types'
 import { CurriculumItem } from '@/types/curriculum.types'
 import { ScheduleCell, SchoolSchedule, ClassSchedule } from '@/types/schedule.types'
-import { parseTeacherExcel } from '@/parsers/teacherParser'
-import { parseClassExcel as parseClassSheet } from '@/parsers/classParser'
-import { parseCurriculumExcel } from '@/parsers/curriculumParser'
 import { SUBJECT_NAMES, DEFAULT_PERIODS } from '@/data/constants'
+import { parseMatrixExcel } from '@/parsers/matrixParser'
+import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
 
 /**
  * Excel 导入导出服务
  */
 
-/**
- * 导入数据结构
- */
 export interface ImportResult {
   teachers: Teacher[]
   classes: SchoolClass[]
   curriculumItems: CurriculumItem[]
+  rawImportData: AggregationInput | null
   errors: string[]
   warnings: string[]
 }
 
 /**
- * 从Excel文件导入所有数据
+ * 从极简单表(Excel文件)导入基础任课名单数据，并与系统既定规则合并生成排课对象。
  */
 export function importFromExcel(buffer: ArrayBuffer): ImportResult {
-  const errors: string[] = []
-  const warnings: string[] = []
+  console.log('[ExcelService] Starting matrix import, buffer size:', buffer.byteLength)
+  try {
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
 
-  console.log('[ExcelService] Starting import, buffer size:', buffer.byteLength)
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  console.log('[ExcelService] Workbook sheets:', workbook.SheetNames)
-
-  // 解析教师数据
-  let teachers: Teacher[] = []
-  const teacherSheet = workbook.Sheets['教师'] || workbook.Sheets['teachers'] || workbook.Sheets[workbook.SheetNames[0]]
-  if (teacherSheet) {
-    try {
-      teachers = parseTeacherExcel(teacherSheet)
-      console.log('[ExcelService] Parsed teachers:', teachers.length)
-    } catch (error) {
-      console.error('[ExcelService] Teacher parse error:', error)
-      errors.push(`解析教师数据失败: ${error}`)
+    if (!worksheet) {
+      throw new Error('找不到可用的工作表')
     }
-  } else {
-    console.warn('[ExcelService] No teacher sheet found')
-  }
 
-  // 解析班级数据
-  let classes: SchoolClass[] = []
-  const classSheet = workbook.Sheets['班级'] || workbook.Sheets['classes'] || workbook.Sheets[workbook.SheetNames[1]]
-  if (classSheet) {
-    try {
-      classes = parseClassSheet(classSheet)
-      console.log('[ExcelService] Parsed classes:', classes.length)
-    } catch (error) {
-      console.error('[ExcelService] Class parse error:', error)
-      errors.push(`解析班级数据失败: ${error}`)
+    // 1. 解析极简的横纵矩阵横向任课表
+    const parsedData = parseMatrixExcel(worksheet)
+    console.log('[ExcelService] Successfully extracted matrix data:', parsedData)
+    
+    // 2. 利用规则聚合引擎，补充上全部排课必须的属性（如：周课时数、优先度、禁排规则等）
+    const aggregatedResult = aggregateRulesWithData(parsedData)
+    console.log('[ExcelService] Applied rules aggregation:', {
+      teachers: aggregatedResult.teachers.length,
+      classes: aggregatedResult.classes.length,
+      items: aggregatedResult.curriculumItems.length
+    })
+
+    return {
+      teachers: aggregatedResult.teachers,
+      classes: aggregatedResult.classes,
+      curriculumItems: aggregatedResult.curriculumItems,
+      rawImportData: parsedData,
+      errors: [],
+      warnings: []
     }
-  } else {
-    console.warn('[ExcelService] No class sheet found')
-  }
-
-  // 解析教学计划数据
-  let curriculumItems: CurriculumItem[] = []
-  const curriculumSheet = workbook.Sheets['教学计划'] || workbook.Sheets['curriculum'] || workbook.Sheets[workbook.SheetNames[2]]
-  if (curriculumSheet) {
-    try {
-      // 构建班级名称到ID的映射
-      const classIdMap = new Map<string, string>()
-      for (const cls of classes) {
-        classIdMap.set(cls.name, cls.id)
-      }
-      console.log('[ExcelService] Class ID map:', Array.from(classIdMap.entries()))
-
-      // 构建教师工号到ID的映射
-      const teacherIdMap = new Map<string, string>()
-      for (const teacher of teachers) {
-        teacherIdMap.set(teacher.employeeId, teacher.id)
-      }
-      console.log('[ExcelService] Teacher ID map:', Array.from(teacherIdMap.entries()))
-
-      curriculumItems = parseCurriculumExcel(curriculumSheet, classIdMap, teacherIdMap)
-      console.log('[ExcelService] Parsed curriculum items:', curriculumItems.length)
-    } catch (error) {
-      console.error('[ExcelService] Curriculum parse error:', error)
-      errors.push(`解析教学计划数据失败: ${error}`)
+  } catch (error: any) {
+    console.error('[ExcelService] Import error:', error)
+    return {
+      teachers: [],
+      classes: [],
+      curriculumItems: [],
+      rawImportData: null,
+      errors: [error.message || String(error)],
+      warnings: []
     }
-  } else {
-    console.warn('[ExcelService] No curriculum sheet found')
-  }
-
-  console.log('[ExcelService] Import result:', { teachers: teachers.length, classes: classes.length, curriculumItems: curriculumItems.length, errors, warnings })
-
-  return {
-    teachers,
-    classes,
-    curriculumItems,
-    errors,
-    warnings
   }
 }
 
@@ -287,61 +250,52 @@ function createTeacherScheduleSheet(teacher: Teacher, cells: ScheduleCell[]): XL
 }
 
 /**
- * 生成导入模板Excel
+ * 生成全新的极简一元矩阵模板Excel
  */
 export function generateImportTemplate(): ArrayBuffer {
   const workbook = XLSX.utils.book_new()
 
-  // 教师表模板
-  const teacherTemplate = [
-    ['工号', '姓名', '任教学科', '周课时上限', '避开时段', '电话', '邮箱', '备注'],
-    ['T001', '张三', '数学', 20, '', '13800138000', 'zhangsan@school.edu', ''],
-    ['T002', '李四', '语文', 18, '周一1,周五5', '', '', '不排早读']
+  // 任课排班表模板
+  const matrixTemplate = [
+    ['年级', '班级名称', '班主任', '语文', '数学', '英语', '物理', '历史', '音乐'],
+    ['高一', '高一1班', '张老实', '王文学', '张算数', '李外语', '赵牛顿', '钱史记', '周贝多'],
+    ['高一', '高一2班', '王文学', '吴作文', '张算数', '郑语法', '孙阿基', '钱史记', '周贝多']
   ]
-  const teacherSheet = XLSX.utils.aoa_to_sheet(teacherTemplate)
-  XLSX.utils.book_append_sheet(workbook, teacherSheet, '教师')
-
-  // 班级表模板
-  const classTemplate = [
-    ['班级名称', '年级', '班号', '学生人数', '教室', '班主任工号', '备注'],
-    ['高一(1)班', '高一', 1, 45, 'A101', 'T001', ''],
-    ['高一(2)班', '高一', 2, 42, 'A102', 'T002', '']
+  const matrixSheet = XLSX.utils.aoa_to_sheet(matrixTemplate)
+  
+  // 设置列宽更美观
+  matrixSheet['!cols'] = [
+    { wch: 10 },
+    { wch: 15 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
+    { wch: 10 },
   ]
-  const classSheet = XLSX.utils.aoa_to_sheet(classTemplate)
-  XLSX.utils.book_append_sheet(workbook, classSheet, '班级')
-
-  // 教学计划表模板
-  const curriculumTemplate = [
-    ['班级名称', '学科', '教师工号', '周课时数', '是否连堂', '连堂节数', '固定时段', '优先级', '备注'],
-    ['高一(1)班', '数学', 'T001', 5, '是', 2, '', 10, ''],
-    ['高一(1)班', '语文', 'T002', 5, '', '', '', '', ''],
-    ['高一(1)班', '英语', 'T003', 4, '', '', '周一1', '', '固定早读']
-  ]
-  const curriculumSheet = XLSX.utils.aoa_to_sheet(curriculumTemplate)
-  XLSX.utils.book_append_sheet(workbook, curriculumSheet, '教学计划')
+  XLSX.utils.book_append_sheet(workbook, matrixSheet, '排课名单')
 
   // 说明表
   const instructionTemplate = [
-    ['数据导入说明'],
+    ['数据导入超简明说明'],
     [],
-    ['1. 教师表字段说明:'],
-    ['   - 工号: 唯一标识'],
-    ['   - 姓名: 教师姓名'],
-    ['   - 任教学科: 语文/数学/英语/物理/化学/生物/历史/地理/政治/体育/音乐/美术/计算机'],
-    ['   - 周课时上限: 默认20节'],
-    ['   - 避开时段: 格式如 "周一1,周二2" 或 "1-1,2-2"'],
+    ['只需填写一张表格，无需复制黏贴各种长代码！'],
     [],
-    ['2. 班级表字段说明:'],
-    ['   - 年级: 一年级~高三'],
-    ['   - 班号: 班级序号'],
+    ['1. 班级标识：'],
+    ['   - 每一行代表一个班级，年级（如：高一）和班级名称（如：高一2班）必填。'],
     [],
-    ['3. 教学计划表字段说明:'],
-    ['   - 是否连堂: 是/否'],
-    ['   - 固定时段: 格式如 "周一1"'],
-    ['   - 优先级: 数值越大越优先排课']
+    ['2. 谁教谁（任课关系）：'],
+    ['   - 从第四列起是所有的学科名字。你可以自由增减列数，但请确保表头名是标准学科名称（如：语文、数学、地理等）。'],
+    ['   - 在这一列，属于这个班的单元格处，填上任课老师的姓名。如果有同名老师，请加上后缀（如：李四大、李四小）。'],
+    [],
+    ['3. 排课规则去哪里配置：'],
+    ['   - 本表极其纯净，因为所有复杂的【排几节课】、【连堂】和【禁排时间】不再需要填写在 Excel 内。'],
+    ['   - 等导入本文件成功后，进入界面菜单的「排课规则」页面直接设置。系统会自动将名单和规则合成处理。'],
   ]
   const instructionSheet = XLSX.utils.aoa_to_sheet(instructionTemplate)
-  XLSX.utils.book_append_sheet(workbook, instructionSheet, '说明')
+  XLSX.utils.book_append_sheet(workbook, instructionSheet, '阅读说明')
 
   const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
   return buffer
