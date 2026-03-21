@@ -14,10 +14,12 @@
 ## ✅ 已实现功能
 
 ### 数据层
+
 - **Excel 数据导入**：支持导入教师、班级、教学任务数据，提供模板下载
 - **本地持久化**：Zustand + LocalStorage，无需后端
 
 ### 规则引擎（全面集成）
+
 - **SubjectRule**：周课时数、连堂设置、每日最大节数（dailyMax）、上午/下午偏好（timePreference）
 - **SubjectTimeRule**：学科固定课位（fixed）、学科绝对禁排（must_not）—— 排课与调课均生效
 - **GlobalTimeRule**：全校禁排时段，自动注入所有教师 avoidTimeSlots
@@ -25,15 +27,18 @@
 - **TeacherLoadRule**：教师最大周课时上限，代课时强制检查
 
 ### 排课算法
+
 - **贪心排课**：连堂课优先、固定课位优先、课程均匀分布、学科禁排硬过滤
 - **均匀分布优化**：同一学科避免集中排在同一天
 
 ### 调课引擎（三级优先级）
+
 1. **P0（首选）**：同班同日互换 —— 含学科禁排验证
 2. **P1（次选）**：同班跨日互换 —— 含学科禁排验证
 3. **P2（保底）**：同科目教师代课 —— 含教师课时上限检查
 
 ### 课表可视化
+
 - 按班级 / 教师视图展示
 - 规则配置交互界面（学科时间约束网格）
 
@@ -81,7 +86,7 @@ npm run build
 
 ## 📁 项目结构
 
-```
+```plaintext
 src/
 ├── algorithms/          # 核心算法
 │   ├── scheduler/       # 排课算法（greedyScheduler）
@@ -97,7 +102,7 @@ src/
 ## 📄 相关文档
 
 | 文档 | 说明 |
-|---|---|
+| --- | --- |
 | [docs/implementation_plan.md](docs/implementation_plan.md) | 向导式布局实施计划与未完成任务清单 |
 | [docs/rule_engine_audit.md](docs/rule_engine_audit.md) | 规则引擎集成审计报告 |
 

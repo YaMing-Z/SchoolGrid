@@ -56,3 +56,7 @@ vite.config.ts.timestamp-*
 # Misc
 *.pem
 *.tgz
+.vite/deps/_metadata.json
+.vite/deps/package.json
+.vite/deps_temp_b4f4c01d/_metadata.json
+.vite/deps_temp_b4f4c01d/package.json
