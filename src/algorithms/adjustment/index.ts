@@ -140,11 +140,17 @@ export class AdjustmentEngine {
       allSuggestions.push(...p0Suggestions)
     }
 
-    // P1: 同班跨日互换
-    if (this.config.enableP1 && allSuggestions.length < this.config.maxSuggestions) {
+    // P1: 同班跨日互换（移除数量限制，确保总是执行）
+    if (this.config.enableP1) {
       const p1Suggestions = findCrossDaySwaps(targetCell, classCells, undefined, this.subjectForbiddenSlots)
         .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
+
+      console.log('[AdjustmentEngine] P1 cross-day suggestions:', {
+        targetCellId: targetCell.id,
+        classCellsCount: classCells.length,
+        p1Count: p1Suggestions.length
+      })
 
       allSuggestions.push(...p1Suggestions)
     }

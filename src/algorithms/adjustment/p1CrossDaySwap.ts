@@ -34,18 +34,40 @@ export function findCrossDaySwaps(
 ): AdjustmentSuggestion[] {
   const suggestions: AdjustmentSuggestion[] = []
 
-  // 找到同班不同日的课程（排除同一教师的课程，因为教师请假时换自己的课没有意义）
+  // 找到同班不同日的课程
+  // 排除同一教师的课程：教师调换自己的课没有意义（除非是代课场景）
   const crossDayCells = allCells.filter(
     cell =>
       cell.dayOfWeek !== targetCell.dayOfWeek &&
       cell.id !== targetCell.id &&
-      cell.teacherId !== targetCell.teacherId && // 排除同一教师的课程
+      cell.teacherId !== targetCell.teacherId &&  // 排除同一教师的课程
       !cell.isFixed
   )
+
+  console.log('[findCrossDaySwaps] Filtering cross-day cells:', {
+    targetCellId: targetCell.id,
+    targetDayOfWeek: targetCell.dayOfWeek,
+    allCellsCount: allCells.length,
+    crossDayCellsCount: crossDayCells.length,
+    crossDayCells: crossDayCells.map(c => ({
+      id: c.id,
+      dayOfWeek: c.dayOfWeek,
+      period: c.period,
+      subject: c.subject,
+      isFixed: c.isFixed
+    }))
+  })
 
   for (const candidateCell of crossDayCells) {
     // 检查互换后是否可行
     const canSwap = canCrossDaySwap(targetCell, candidateCell, teacherAvailability, subjectForbiddenSlots)
+
+    console.log('[findCrossDaySwaps] Checking candidate:', {
+      candidateId: candidateCell.id,
+      candidateDay: candidateCell.dayOfWeek,
+      candidatePeriod: candidateCell.period,
+      canSwap
+    })
 
     if (canSwap) {
       const operations: ScheduleOperation[] = [
