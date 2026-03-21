@@ -23,12 +23,14 @@ import { DayOfWeek, SUBJECT_NAMES, Subject } from '@/data/constants'
  * @param targetCell 需要调整的目标单元格
  * @param allCells 该班级的所有课程单元格
  * @param teacherAvailability 教师可用性（可选）
+ * @param subjectForbiddenSlots 学科绝对禁排时段（可选）
  * @returns 可互换的建议列表
  */
 export function findCrossDaySwaps(
   targetCell: ScheduleCell,
   allCells: ScheduleCell[],
-  teacherAvailability?: Map<string, Set<string>>
+  teacherAvailability?: Map<string, Set<string>>,
+  subjectForbiddenSlots?: Map<string, Set<string>>
 ): AdjustmentSuggestion[] {
   const suggestions: AdjustmentSuggestion[] = []
 
@@ -43,7 +45,7 @@ export function findCrossDaySwaps(
 
   for (const candidateCell of crossDayCells) {
     // 检查互换后是否可行
-    const canSwap = canCrossDaySwap(targetCell, candidateCell, teacherAvailability)
+    const canSwap = canCrossDaySwap(targetCell, candidateCell, teacherAvailability, subjectForbiddenSlots)
 
     if (canSwap) {
       const operations: ScheduleOperation[] = [
@@ -96,7 +98,8 @@ export function findCrossDaySwaps(
 export function canCrossDaySwap(
   targetCell: ScheduleCell,
   candidateCell: ScheduleCell,
-  teacherAvailability?: Map<string, Set<string>>
+  teacherAvailability?: Map<string, Set<string>>,
+  subjectForbiddenSlots?: Map<string, Set<string>>
 ): boolean {
   // 固定课程不能互换
   if (targetCell.isFixed || candidateCell.isFixed) {
@@ -121,6 +124,18 @@ export function canCrossDaySwap(
       ?.has(`${targetCell.dayOfWeek}_${targetCell.period}`)
 
     if (targetTeacherAvailable === false || candidateTeacherAvailable === false) {
+      return false
+    }
+  }
+
+  // [修复] 检查学科禁排时段
+  if (subjectForbiddenSlots) {
+    // 目标学科将进入候选时段
+    if (subjectForbiddenSlots.get(targetCell.subject)?.has(`${candidateCell.dayOfWeek}_${candidateCell.period}`)) {
+      return false
+    }
+    // 候选学科将进入目标时段
+    if (subjectForbiddenSlots.get(candidateCell.subject)?.has(`${targetCell.dayOfWeek}_${targetCell.period}`)) {
       return false
     }
   }
