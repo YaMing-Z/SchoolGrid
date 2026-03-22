@@ -1,11 +1,13 @@
 import { DndContext, DragStartEvent, DragEndEvent, DragMoveEvent, DragOverlay, PointerSensor, useSensor, useSensors, CollisionDetection } from '@dnd-kit/core'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { ScheduleCell } from '@/types/schedule.types'
-import { SUBJECT_NAMES, SUBJECT_COLORS } from '@/data/constants'
+import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
 import { DraggableCourse } from './DraggableCourse'
 import { DropTargetCell } from './DropTargetCell'
 import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentProposalPanel'
 import { ConflictTooltip } from './ConflictUI'
+import { TeacherSelectorModal } from './TeacherSelectorModal'
+import { getClassTeachers } from '@/utils/classHelpers'
 import { useState, useEffect } from 'react'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
@@ -78,6 +80,10 @@ export function ScheduleGrid() {
 
   const [activeCell, setActiveCell] = useState<ScheduleCell | null>(null)
 
+  // 教师选择器状态
+  const [teacherSelectorVisible, setTeacherSelectorVisible] = useState(false)
+  const [selectedSelfStudyCell, setSelectedSelfStudyCell] = useState<ScheduleCell | null>(null)
+
   // 默认选中第一个班级
   useEffect(() => {
     if (!selectedClassId && classes.length > 0) {
@@ -99,7 +105,12 @@ export function ScheduleGrid() {
   }
 
   // 获取教师姓名
-  const getTeacherName = (teacherId: string) => {
+  const getTeacherName = (teacherId: string, cellSubject?: Subject) => {
+    // 自习课没有指定教师时显示"待安排"
+    if (cellSubject === Subject.SelfStudy && !teacherId) {
+      return '待安排'
+    }
+
     const teacher = teachers.find(t => t.id === teacherId || t.employeeId === teacherId)
     return teacher?.name || teacherId
   }
@@ -163,6 +174,23 @@ export function ScheduleGrid() {
     setActiveCell(null)
     hideTooltip()
     endDrag()
+  }
+
+  // 处理自习课点击
+  const handleSelfStudyClick = (cell: ScheduleCell) => {
+    if (cell.subject === Subject.SelfStudy) {
+      setSelectedSelfStudyCell(cell)
+      setTeacherSelectorVisible(true)
+    }
+  }
+
+  // 处理教师选择
+  const handleTeacherSelect = (teacherId: string) => {
+    if (selectedSelfStudyCell) {
+      useScheduleStore.getState().assignSelfStudyTeacher(selectedSelfStudyCell.id, teacherId)
+      setTeacherSelectorVisible(false)
+      setSelectedSelfStudyCell(null)
+    }
   }
 
   // 空状态处理
@@ -362,6 +390,7 @@ export function ScheduleGrid() {
                           <DraggableCourse
                             cell={cell}
                             getTeacherName={getTeacherName}
+                            onClick={() => handleSelfStudyClick(cell)}
                           />
                         ) : (
                           !isDragging && (
@@ -438,6 +467,23 @@ export function ScheduleGrid() {
         position={tooltipState.position}
         onClose={hideTooltip}
       />
+
+      {/* 自习课教师选择器 */}
+      {teacherSelectorVisible && selectedSelfStudyCell && selectedClassId && (
+        <TeacherSelectorModal
+          visible={teacherSelectorVisible}
+          classId={selectedClassId}
+          dayOfWeek={selectedSelfStudyCell.dayOfWeek}
+          period={selectedSelfStudyCell.period}
+          currentTeacherId={selectedSelfStudyCell.teacherId}
+          teachers={getClassTeachers(selectedClassId, curriculumItems, teachers)}
+          onClose={() => {
+            setTeacherSelectorVisible(false)
+            setSelectedSelfStudyCell(null)
+          }}
+          onSelectTeacher={handleTeacherSelect}
+        />
+      )}
     </DndContext>
   )
 }
