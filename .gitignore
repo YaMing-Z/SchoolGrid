@@ -57,3 +57,4 @@ vite.config.ts.timestamp-*
 *.pem
 *.tgz
 .vite/*
+.playwright-mcp/*

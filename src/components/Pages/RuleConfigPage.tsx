@@ -3,9 +3,11 @@ import { useRuleStore, DEFAULT_SCHEDULE_CONFIG } from '@/stores/ruleStore'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { Subject, SUBJECT_NAMES } from '@/data/constants'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
+import { GenerateScheduleConfirmModal } from '@/components/Dashboard/GenerateScheduleConfirmModal'
 
 export function RuleConfigPage() {
   const [activeTab, setActiveTab] = useState<'subject' | 'global' | 'teacher' | 'schedule'>('schedule')
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto animate-fade-in flex flex-col h-full">
@@ -94,19 +96,25 @@ export function RuleConfigPage() {
           <span>返回修改数据</span>
         </button>
         
-        <button 
-          onClick={() => {
-            useScheduleStore.getState().nextStep()
-            useScheduleStore.getState().generateSchedule()
-            // generateSchedule currently switches currentView to 'schedule' inside its logic, but we make sure here
-            useScheduleStore.getState().setView('schedule')
-          }}
+        <button
+          onClick={() => setShowConfirmModal(true)}
           className="px-8 py-3 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white rounded-xl shadow-lg shadow-[var(--color-primary)]/20 hover:scale-105 transition-all font-medium text-lg flex items-center gap-2"
         >
           <span>下一步：自动生成课表</span>
           <span>➡️</span>
         </button>
       </div>
+
+      {/* 生成课表确认框 */}
+      <GenerateScheduleConfirmModal
+        visible={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={() => {
+          useScheduleStore.getState().nextStep()
+          useScheduleStore.getState().generateSchedule()
+          useScheduleStore.getState().setView('schedule')
+        }}
+      />
     </div>
   )
 }

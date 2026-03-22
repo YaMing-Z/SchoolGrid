@@ -7,6 +7,7 @@ import { DropTargetCell } from './DropTargetCell'
 import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentProposalPanel'
 import { ConflictTooltip } from './ConflictUI'
 import { TeacherSelectorModal } from './TeacherSelectorModal'
+import { GenerateScheduleConfirmModal } from '@/components/Dashboard/GenerateScheduleConfirmModal'
 import { getClassTeachers } from '@/utils/classHelpers'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 import { useState, useEffect } from 'react'
@@ -86,6 +87,9 @@ export function ScheduleGrid() {
   // 教师选择器状态
   const [teacherSelectorVisible, setTeacherSelectorVisible] = useState(false)
   const [selectedSelfStudyCell, setSelectedSelfStudyCell] = useState<ScheduleCell | null>(null)
+
+  // 生成课表确认框状态
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   // 默认选中第一个班级
   useEffect(() => {
@@ -201,20 +205,27 @@ export function ScheduleGrid() {
     // 已导入数据但未排课
     if (hasImportedData) {
       return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-[var(--color-text-muted)]">
-          <span className="text-6xl mb-4">📊</span>
-          <p className="text-lg mb-2 text-[var(--color-text-primary)]">数据已就绪</p>
-          <p className="text-sm mb-6">
-            已导入 {classes.length} 个班级、{teachers.length} 位教师、{curriculumItems.length} 条教学计划
-          </p>
-          <button
-            onClick={() => generateSchedule()}
-            className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors flex items-center gap-2"
-          >
-            <span>🚀</span>
-            <span>开始排课</span>
-          </button>
-        </div>
+        <>
+          <div className="flex flex-col items-center justify-center h-[60vh] text-[var(--color-text-muted)]">
+            <span className="text-6xl mb-4">📊</span>
+            <p className="text-lg mb-2 text-[var(--color-text-primary)]">数据已就绪</p>
+            <p className="text-sm mb-6">
+              已导入 {classes.length} 个班级、{teachers.length} 位教师、{curriculumItems.length} 条教学计划
+            </p>
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors flex items-center gap-2"
+            >
+              <span>🚀</span>
+              <span>开始排课</span>
+            </button>
+          </div>
+          <GenerateScheduleConfirmModal
+            visible={showConfirmModal}
+            onClose={() => setShowConfirmModal(false)}
+            onConfirm={() => generateSchedule()}
+          />
+        </>
       )
     }
 
@@ -235,6 +246,7 @@ export function ScheduleGrid() {
   }
 
   return (
+    <>
     <DndContext
       sensors={sensors}
       collisionDetection={customCollisionDetection}
@@ -284,11 +296,7 @@ export function ScheduleGrid() {
             <div className="w-px h-6 bg-gray-200"></div>
             
             <button
-              onClick={() => {
-                if (confirm('确定要重新生成课表吗？当前课表将被清除。')) {
-                  generateSchedule()
-                }
-              }}
+              onClick={() => setShowConfirmModal(true)}
               className="px-4 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg
                          hover:bg-[var(--color-primary-dark)] transition-colors flex items-center gap-2"
             >
@@ -488,5 +496,13 @@ export function ScheduleGrid() {
         />
       )}
     </DndContext>
+
+      {/* 生成课表确认框 */}
+      <GenerateScheduleConfirmModal
+        visible={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={() => generateSchedule()}
+      />
+    </>
   )
 }

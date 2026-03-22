@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { SUBJECT_NAMES, Subject } from '@/data/constants'
+import { GenerateScheduleConfirmModal } from '@/components/Dashboard/GenerateScheduleConfirmModal'
 
 const statCards = [
   { key: 'teachers', label: '教师总数', icon: '👨‍🏫', color: 'from-blue-500 to-blue-600' },
@@ -18,6 +20,7 @@ const flowSteps = [
 
 export function DashboardPage() {
   const { teachers, classes, curriculumItems, schedule, setView } = useScheduleStore()
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   const stats = {
     teachers: teachers.length,
@@ -86,6 +89,7 @@ export function DashboardPage() {
   }
 
   return (
+    <>
     <div className="p-6 max-w-[1400px] mx-auto space-y-8 animate-fade-in h-full overflow-y-auto">
       {/* Page header */}
       <div className="flex items-end justify-between">
@@ -99,7 +103,7 @@ export function DashboardPage() {
         </div>
         {hasData && !schedule && (
           <button
-            onClick={() => useScheduleStore.getState().generateSchedule()}
+            onClick={() => setShowConfirmModal(true)}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-light)]
                        text-white font-medium shadow-md hover:shadow-lg transition-all duration-300
                        flex items-center gap-2"
@@ -249,5 +253,13 @@ export function DashboardPage() {
         </div>
       )}
     </div>
+
+      {/* 生成课表确认框 */}
+      <GenerateScheduleConfirmModal
+        visible={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={() => useScheduleStore.getState().generateSchedule()}
+      />
+    </>
   )
 }
