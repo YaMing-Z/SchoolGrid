@@ -107,12 +107,15 @@ function SubjectRuleConfig() {
   // 当前规则
   const currentRules = subjectRules
   
-  // 从导入数据中提取可选学科，并确保「班会」作为底部的默认选项
+  // 从导入数据中提取可选学科，并确保「班会」「自习」作为底部的默认选项
   const importedSubjects = new Set<Subject>()
   rawImportData?.assignments.forEach(a => importedSubjects.add(a.subject))
   const availableBaseSubjects = Array.from(importedSubjects)
   if (!availableBaseSubjects.includes(Subject.Meeting)) {
     availableBaseSubjects.push(Subject.Meeting)
+  }
+  if (!availableBaseSubjects.includes(Subject.SelfStudy)) {
+    availableBaseSubjects.push(Subject.SelfStudy)
   }
   
   const handleAddRule = () => {
