@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { SUBJECT_NAMES } from '@/data/constants'
 import { ClassTeacherInfo } from '@/utils/classHelpers'
 import { useScheduleStore } from '@/stores/scheduleStore'
+import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 
 interface TeacherSelectorModalProps {
   visible: boolean
@@ -16,7 +17,6 @@ interface TeacherSelectorModalProps {
 }
 
 const DAY_NAMES = ['', '周一', '周二', '周三', '周四', '周五']
-const PERIOD_NAMES = ['', '第1节', '第2节', '第3节', '第4节', '第5节', '第6节', '第7节', '第8节']
 
 /**
  * 教师选择器弹窗组件
@@ -34,6 +34,7 @@ export function TeacherSelectorModal({
   onSelectTeacher
 }: TeacherSelectorModalProps) {
   const schedule = useScheduleStore(state => state.schedule)
+  const { getPeriodName } = useScheduleConfig()
 
   // ESC 键关闭
   useEffect(() => {
@@ -85,7 +86,7 @@ export function TeacherSelectorModal({
                 选择自习值班教师
               </h3>
               <p className="text-sm text-[var(--color-text-muted)] mt-1">
-                {DAY_NAMES[dayOfWeek]} {PERIOD_NAMES[period]}
+                {DAY_NAMES[dayOfWeek]} {getPeriodName(period)}
               </p>
             </div>
             <button

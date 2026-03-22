@@ -8,10 +8,10 @@ import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentPropo
 import { ConflictTooltip } from './ConflictUI'
 import { TeacherSelectorModal } from './TeacherSelectorModal'
 import { getClassTeachers } from '@/utils/classHelpers'
+import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 import { useState, useEffect } from 'react'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
-const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
 
 /**
  * 自定义碰撞检测：基于指针位置的精确检测
@@ -77,6 +77,9 @@ export function ScheduleGrid() {
     curriculumItems,
     rawImportData
   } = useScheduleStore()
+
+  const { getPeriodNumbers, isMorning: isMorningPeriod } = useScheduleConfig()
+  const periods = getPeriodNumbers()
 
   const [activeCell, setActiveCell] = useState<ScheduleCell | null>(null)
 
@@ -364,13 +367,13 @@ export function ScheduleGrid() {
               </div>
 
               {/* Period rows */}
-              {PERIODS.map((period) => (
+              {periods.map((period) => (
                 <div key={period} className="grid grid-cols-6 border-b border-[var(--color-border-light)] last:border-b-0">
                   {/* Period label */}
                   <div className="p-3 bg-[var(--color-bg-secondary)] flex flex-col justify-center">
                     <span className="font-medium text-[var(--color-text-primary)]">第{period}节</span>
                     <span className="text-xs text-[var(--color-text-muted)]">
-                      {period <= 4 ? '上午' : '下午'}
+                      {isMorningPeriod(period) ? '上午' : '下午'}
                     </span>
                   </div>
 

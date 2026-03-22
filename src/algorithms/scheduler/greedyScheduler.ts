@@ -10,8 +10,14 @@ import {
 import { CurriculumItem } from '@/types/curriculum.types'
 import { Teacher, TimeSlotRef } from '@/types/teacher.types'
 import { SchoolClass } from '@/types/class.types'
-import { DayOfWeek, Subject, DEFAULT_PERIODS_PER_DAY, DEFAULT_SCHOOL_DAYS } from '@/data/constants'
+import { DayOfWeek, Subject, DEFAULT_SCHOOL_DAYS } from '@/data/constants'
 import { useRuleStore } from '@/stores/ruleStore'
+
+// 获取当前配置的每天节次数
+function getPeriodsPerDay(): number {
+  const { scheduleConfig } = useRuleStore.getState()
+  return scheduleConfig.periodsPerDay
+}
 
 /**
  * 优化排课算法
@@ -126,10 +132,12 @@ function canPlaceConsecutive(
   count: number,
   teacher: Teacher | undefined,
   subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subject?: Subject
+  subject?: Subject,
+  periodsPerDay?: number
 ): boolean {
   // 检查起始节是否在合理范围内
-  if (startPeriod + count - 1 > DEFAULT_PERIODS_PER_DAY) {
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
+  if (startPeriod + count - 1 > maxPeriods) {
     return false
   }
 
@@ -317,7 +325,8 @@ function findBestConsecutiveSlot(
   subjectDistribution: Map<string, number>,
   subjectForbiddenSlots?: Map<Subject, Set<string>>,
   subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>
+  subjectTimePreference?: Map<Subject, string>,
+  periodsPerDay?: number
 ): { dayOfWeek: number; startPeriod: number } | null {
   // 计算每天该学科的课程数
   const dayScores: { day: number; score: number; startPeriod: number }[] = []
@@ -326,6 +335,8 @@ function findBestConsecutiveSlot(
   const dailyMax = subjectDailyMax?.get(item.subject)
   // [P1-2] 获取该学科的时段偏好
   const timePreference = subjectTimePreference?.get(item.subject)
+  // 获取每天节次数
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
 
   for (const day of DEFAULT_SCHOOL_DAYS) {
     // 计算当天该学科已有的课程数
@@ -338,8 +349,8 @@ function findBestConsecutiveSlot(
 
     // 找到第一个可用的连堂时段
     let earliestPeriod = -1
-    for (let startPeriod = 1; startPeriod <= DEFAULT_PERIODS_PER_DAY - consecutiveCount + 1; startPeriod++) {
-      if (canPlaceConsecutive(context, item.teacherId, item.classId, day, startPeriod, consecutiveCount, teacher, subjectForbiddenSlots, item.subject)) {
+    for (let startPeriod = 1; startPeriod <= maxPeriods - consecutiveCount + 1; startPeriod++) {
+      if (canPlaceConsecutive(context, item.teacherId, item.classId, day, startPeriod, consecutiveCount, teacher, subjectForbiddenSlots, item.subject, maxPeriods)) {
         earliestPeriod = startPeriod
         break
       }
@@ -390,15 +401,17 @@ function placeConsecutiveCourse(
   subjectDistribution: Map<string, number>,
   subjectForbiddenSlots?: Map<Subject, Set<string>>,
   subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>
+  subjectTimePreference?: Map<Subject, string>,
+  periodsPerDay?: number
 ): number {
   const consecutiveCount = item.consecutiveCount || 2
   const groupsToPlace = Math.floor(remainingHours / consecutiveCount)
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
 
   let placed = 0
 
   for (let g = 0; g < groupsToPlace; g++) {
-    const bestSlot = findBestConsecutiveSlot(item, context, consecutiveCount, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference)
+    const bestSlot = findBestConsecutiveSlot(item, context, consecutiveCount, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods)
 
     if (bestSlot) {
       // 放置连堂课
@@ -437,7 +450,8 @@ function findBestRegularSlot(
   subjectDistribution: Map<string, number>,
   subjectForbiddenSlots?: Map<Subject, Set<string>>,
   subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>
+  subjectTimePreference?: Map<Subject, string>,
+  periodsPerDay?: number
 ): { dayOfWeek: number; period: number } | null {
   // 计算每天该学科的课程数
   const slotScores: { day: number; period: number; score: number }[] = []
@@ -446,6 +460,8 @@ function findBestRegularSlot(
   const dailyMax = subjectDailyMax?.get(item.subject)
   // [P1-2] 获取该学科的时段偏好
   const timePreference = subjectTimePreference?.get(item.subject)
+  // 获取每天节次数
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
 
   for (const day of DEFAULT_SCHOOL_DAYS) {
     // 计算当天该学科已有的课程数
@@ -456,7 +472,7 @@ function findBestRegularSlot(
       continue
     }
 
-    for (let period = 1; period <= DEFAULT_PERIODS_PER_DAY; period++) {
+    for (let period = 1; period <= maxPeriods; period++) {
       if (canPlaceCourse(context, item.teacherId, item.classId, day, period, teacher, subjectForbiddenSlots, item.subject)) {
         // [P1-2] 根据时段偏好计算加权分数
         let preferenceScore = 0
@@ -472,7 +488,7 @@ function findBestRegularSlot(
         // 将 period 反向加权，越靠后的节次分数越低
         let periodScore = period
         if (item.subject === Subject.SelfStudy) {
-          periodScore = (DEFAULT_PERIODS_PER_DAY - period + 1) * 10 // 第8节得分最低（最优），第1节得分最高
+          periodScore = (maxPeriods - period + 1) * 10 // 最后一节得分最低（最优），第1节得分最高
         }
 
         // 分数越低越好
@@ -513,12 +529,14 @@ function placeRegularCourse(
   subjectDistribution: Map<string, number>,
   subjectForbiddenSlots?: Map<Subject, Set<string>>,
   subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>
+  subjectTimePreference?: Map<Subject, string>,
+  periodsPerDay?: number
 ): number {
   let placed = 0
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
 
   while (placed < remainingHours) {
-    const bestSlot = findBestRegularSlot(item, context, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference)
+    const bestSlot = findBestRegularSlot(item, context, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods)
 
     if (bestSlot) {
       const cell = createScheduleCell(item, bestSlot.dayOfWeek, bestSlot.period, false)
@@ -581,7 +599,8 @@ export function runGreedyScheduler(
   const subjectDistribution = new Map<string, number>()
 
   // [P0-3 / P1-1 / P1-2] 从 ruleStore 构建学科级禁排、每日上限、时段偏好的查找表
-  const { subjectTimeRules, subjectRules: allSubjectRules } = useRuleStore.getState()
+  const { subjectTimeRules, subjectRules: allSubjectRules, scheduleConfig } = useRuleStore.getState()
+  const periodsPerDay = scheduleConfig.periodsPerDay
 
   // [P0-3] 学科绝对禁排时段： subject → Set<"dayOfWeek_period">
   const subjectForbiddenSlots = new Map<Subject, Set<string>>()
@@ -631,13 +650,13 @@ export function runGreedyScheduler(
 
     // 2. 如果是连堂课，优先处理连堂
     if (item.isConsecutive && remainingHours > 0) {
-      const consecutivePlaced = placeConsecutiveCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference)
+      const consecutivePlaced = placeConsecutiveCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay)
       remainingHours -= consecutivePlaced
     }
 
     // 3. 放置剩余的普通课程（均匀分布）
     if (remainingHours > 0) {
-      const regularPlaced = placeRegularCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference)
+      const regularPlaced = placeRegularCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay)
       remainingHours -= regularPlaced
     }
 

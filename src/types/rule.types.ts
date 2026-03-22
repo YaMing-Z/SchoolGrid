@@ -2,6 +2,27 @@ import { Subject } from '@/data/constants'
 
 
 /**
+ * 节次时间配置
+ * 定义每一节课的基本信息
+ */
+export interface PeriodConfig {
+  period: number;       // 第几节 (1-based)
+  startTime: string;    // 开始时间 "HH:mm"
+  endTime: string;      // 结束时间 "HH:mm"
+  isMorning: boolean;   // 是否上午
+}
+
+/**
+ * 课表配置
+ * 定义每天的节次数和每节课的时间
+ */
+export interface ScheduleConfig {
+  periodsPerDay: number;           // 每天节次数
+  periods: PeriodConfig[];         // 节次时间配置
+  morningPeriods: number;          // 上午几节课（用于UI显示）
+}
+
+/**
  * 学科排课标准规则
  * 定义特定年级某学科的默认排课要求
  */

@@ -11,6 +11,12 @@ import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggrega
 import { useRuleStore } from '@/stores/ruleStore'
 import { Subject } from '@/data/constants'
 
+// 获取当前配置的节次数组
+function getPeriodsFromConfig(): number[] {
+  const { scheduleConfig } = useRuleStore.getState()
+  return scheduleConfig.periods.map(p => p.period)
+}
+
 /**
  * 将旧版错误码数组转换为结构化冲突详情
  */
@@ -430,10 +436,10 @@ export const useScheduleStore = create<ScheduleState>()(
           }
         }
         
-        // 为所有可能的时段生成冲突分析（周一到周五，1-8节）
+        // 为所有可能的时段生成冲突分析（周一到周五，使用动态节次配置）
         const DAYS = [1, 2, 3, 4, 5]
-        const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
-        
+        const PERIODS = getPeriodsFromConfig()
+
         for (const day of DAYS) {
           for (const period of PERIODS) {
             const targetKey = `${day}_${period}`

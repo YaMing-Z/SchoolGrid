@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useRuleStore } from '@/stores/ruleStore'
+import { useRuleStore, DEFAULT_SCHEDULE_CONFIG } from '@/stores/ruleStore'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { Subject, SUBJECT_NAMES, DEFAULT_PERIODS } from '@/data/constants'
+import { Subject, SUBJECT_NAMES } from '@/data/constants'
+import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 
 export function RuleConfigPage() {
-  const [activeTab, setActiveTab] = useState<'subject' | 'global' | 'teacher'>('subject')
+  const [activeTab, setActiveTab] = useState<'subject' | 'global' | 'teacher' | 'schedule'>('schedule')
 
   return (
     <div className="p-6 max-w-[1200px] mx-auto animate-fade-in flex flex-col h-full">
@@ -23,10 +24,22 @@ export function RuleConfigPage() {
         {/* Sidebar Nav */}
         <div className="w-64 shrink-0 space-y-2">
           <button
+            onClick={() => setActiveTab('schedule')}
+            className={`w-full text-left px-5 py-4 rounded-xl font-medium transition-all duration-200 flex items-center gap-3
+              ${activeTab === 'schedule'
+                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md'
+                : 'bg-white hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-light)]'
+              }`}
+          >
+            <span className="text-xl">📅</span>
+            <span>课表配置</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('subject')}
             className={`w-full text-left px-5 py-4 rounded-xl font-medium transition-all duration-200 flex items-center gap-3
-              ${activeTab === 'subject' 
-                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md' 
+              ${activeTab === 'subject'
+                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md'
                 : 'bg-white hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-light)]'
               }`}
           >
@@ -37,8 +50,8 @@ export function RuleConfigPage() {
           <button
             onClick={() => setActiveTab('global')}
             className={`w-full text-left px-5 py-4 rounded-xl font-medium transition-all duration-200 flex items-center gap-3
-              ${activeTab === 'global' 
-                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md' 
+              ${activeTab === 'global'
+                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md'
                 : 'bg-white hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-light)]'
               }`}
           >
@@ -49,8 +62,8 @@ export function RuleConfigPage() {
           <button
             onClick={() => setActiveTab('teacher')}
             className={`w-full text-left px-5 py-4 rounded-xl font-medium transition-all duration-200 flex items-center gap-3
-              ${activeTab === 'teacher' 
-                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md' 
+              ${activeTab === 'teacher'
+                ? 'bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white shadow-md'
                 : 'bg-white hover:bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] border border-[var(--color-border-light)]'
               }`}
           >
@@ -64,6 +77,7 @@ export function RuleConfigPage() {
           {activeTab === 'subject' && <SubjectRuleConfig />}
           {activeTab === 'global' && <GlobalTimeRuleConfig />}
           {activeTab === 'teacher' && <TeacherRuleConfig />}
+          {activeTab === 'schedule' && <ScheduleConfigPanel />}
         </div>
       </div>
 
@@ -101,6 +115,7 @@ export function RuleConfigPage() {
 function SubjectRuleConfig() {
   const { subjectRules, addSubjectRule, updateSubjectRule, removeSubjectRule, subjectTimeRules, addSubjectTimeRule, removeSubjectTimeRule } = useRuleStore()
   const { rawImportData } = useScheduleStore()
+  const { periods } = useScheduleConfig()
   const [selectedSubject, setSelectedSubject] = useState<Subject | ''>('')
 
   
@@ -312,18 +327,18 @@ function SubjectRuleConfig() {
                  ))}
 
                  {/* 表格体 */}
-                 {DEFAULT_PERIODS.map((p, periodIndex) => (
+                 {periods.map((p, periodIndex) => (
                    <React.Fragment key={`row-${periodIndex}`}>
                      <div className="font-medium text-[var(--color-text-secondary)] flex flex-col items-center justify-center text-xs h-14 bg-white rounded-lg shadow-sm">
-                       <span>第{periodIndex + 1}节</span>
-                       <span className="text-[9px] opacity-70">{p.startTime}-{p.endTime}</span>
+                       <span>第{p.period}节</span>
+                       <span className="text-[9px] opacity-70">{p.startTime && p.endTime ? `${p.startTime}-${p.endTime}` : ''}</span>
                      </div>
 
                      {[1, 2, 3, 4, 5].map(day => {
-                       const rulesInSlot = subjectTimeRules.filter(r => r.dayOfWeek === day && r.period === periodIndex + 1)
+                       const rulesInSlot = subjectTimeRules.filter(r => r.dayOfWeek === day && r.period === p.period)
                        const existingRule = selectedSubject ? rulesInSlot.find(r => r.subject === selectedSubject) : null
                        const state = existingRule?.type || 'available'
-                       
+
                        const handleClick = () => {
                          if (!selectedSubject) {
                             return // Without selecting a subject, clicking cell does nothing (only clicking 'x' on badge works)
@@ -331,19 +346,19 @@ function SubjectRuleConfig() {
 
                          if (!existingRule) {
                            addSubjectTimeRule({
-                             id: `s_rule_${selectedSubject}_${day}_${periodIndex+1}_${Date.now()}`,
+                             id: `s_rule_${selectedSubject}_${day}_${p.period}_${Date.now()}`,
                              subject: selectedSubject as Subject,
                              dayOfWeek: day,
-                             period: periodIndex + 1,
+                             period: p.period,
                              type: 'fixed'
                            })
                          } else if (existingRule.type === 'fixed') {
                            removeSubjectTimeRule(existingRule.id)
                            addSubjectTimeRule({
-                             id: `s_rule_${selectedSubject}_${day}_${periodIndex+1}_${Date.now()}`,
+                             id: `s_rule_${selectedSubject}_${day}_${p.period}_${Date.now()}`,
                              subject: selectedSubject as Subject,
                              dayOfWeek: day,
-                             period: periodIndex + 1,
+                             period: p.period,
                              type: 'must_not'
                            })
                          } else {
@@ -352,8 +367,8 @@ function SubjectRuleConfig() {
                        }
                        
                        return (
-                         <div 
-                           key={`${day}-${periodIndex + 1}`}
+                         <div
+                           key={`${day}-${p.period}`}
                            onClick={handleClick}
                            className={`
                              h-auto min-h-[56px] w-full rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center p-1 relative overflow-hidden group
@@ -416,6 +431,7 @@ function SubjectRuleConfig() {
 
 function GlobalTimeRuleConfig() {
   const { globalTimeRules, addGlobalTimeRule, removeGlobalTimeRule } = useRuleStore()
+  const { periods } = useScheduleConfig()
 
   // 检查某个时段是否已被禁排
   const isRuleActive = (day: number, period: number) => {
@@ -456,19 +472,19 @@ function GlobalTimeRuleConfig() {
             ))}
 
             {/* 表格体 */}
-            {DEFAULT_PERIODS.map((p, periodIndex) => (
+            {periods.map((p, periodIndex) => (
               <React.Fragment key={`row-${periodIndex}`}>
                 <div className="font-medium text-[var(--color-text-secondary)] flex items-center justify-end pr-4 text-xs">
-                  第{periodIndex + 1}节<br/>
-                  <span className="text-[10px] opacity-70 ml-1">{p.startTime}-{p.endTime}</span>
+                  第{p.period}节<br/>
+                  <span className="text-[10px] opacity-70 ml-1">{p.startTime && p.endTime ? `${p.startTime}-${p.endTime}` : ''}</span>
                 </div>
 
                 {[1, 2, 3, 4, 5].map(day => {
-                  const blocked = isRuleActive(day, periodIndex + 1)
+                  const blocked = isRuleActive(day, p.period)
                   return (
-                    <div 
-                      key={`${day}-${periodIndex + 1}`}
-                      onClick={() => toggleSlot(day, periodIndex + 1)}
+                    <div
+                      key={`${day}-${p.period}`}
+                      onClick={() => toggleSlot(day, p.period)}
                       className={`
                         h-16 w-24 rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center justify-center relative overflow-hidden
                         ${blocked 
@@ -500,6 +516,7 @@ function GlobalTimeRuleConfig() {
 function TeacherRuleConfig() {
   const { teacherLoadRule, setTeacherLoadRule, teacherTimeRules, addTeacherTimeRule, removeTeacherTimeRule } = useRuleStore()
   const { teachers } = useScheduleStore()
+  const { periods } = useScheduleConfig()
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>('')
 
   // 获取当前选中教师的时间规则
@@ -617,19 +634,19 @@ function TeacherRuleConfig() {
                  ))}
 
                  {/* 表格体 */}
-                 {DEFAULT_PERIODS.map((p, periodIndex) => (
+                 {periods.map((p, periodIndex) => (
                    <React.Fragment key={`row-${periodIndex}`}>
                      <div className="font-medium text-[var(--color-text-secondary)] flex flex-col items-center justify-center text-xs h-14 bg-white rounded-lg shadow-sm">
-                       <span>第{periodIndex + 1}节</span>
-                       <span className="text-[9px] opacity-70">{p.startTime}-{p.endTime}</span>
+                       <span>第{p.period}节</span>
+                       <span className="text-[9px] opacity-70">{p.startTime && p.endTime ? `${p.startTime}-${p.endTime}` : ''}</span>
                      </div>
 
                      {[1, 2, 3, 4, 5].map(day => {
-                       const state = getSlotState(day, periodIndex + 1)
+                       const state = getSlotState(day, p.period)
                        return (
-                         <div 
-                           key={`${day}-${periodIndex + 1}`}
-                           onClick={() => handleSlotClick(day, periodIndex + 1)}
+                         <div
+                           key={`${day}-${p.period}`}
+                           onClick={() => handleSlotClick(day, p.period)}
                            className={`
                              h-14 w-full rounded-xl border-2 cursor-pointer transition-all duration-200 flex items-center justify-center relative overflow-hidden group
                              ${state === 'must_not' ? 'border-[var(--color-error)] bg-red-50 text-[var(--color-error)] shadow-sm' 
@@ -660,6 +677,176 @@ function TeacherRuleConfig() {
                </div>
              </div>
            )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ScheduleConfigPanel() {
+  const { periods, periodsPerDay, setScheduleConfig, updatePeriod, addPeriod, removePeriod } = useScheduleConfig()
+
+  const handleAddPeriod = () => {
+    if (periodsPerDay >= 12) {
+      alert('节次数已达上限（12节）')
+      return
+    }
+    addPeriod() // 在末尾添加
+  }
+
+  const handleRemovePeriod = () => {
+    if (periodsPerDay <= 1) {
+      alert('至少需要保留一节课')
+      return
+    }
+    removePeriod(periodsPerDay) // 移除最后一节
+  }
+
+  const handleReset = () => {
+    if (confirm('确定要重置为默认配置吗？当前配置将被覆盖。')) {
+      setScheduleConfig(DEFAULT_SCHEDULE_CONFIG)
+    }
+  }
+
+  const handlePeriodChange = (period: number, field: 'startTime' | 'endTime' | 'isMorning', value: string | boolean) => {
+    updatePeriod(period, { [field]: value })
+  }
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="p-6 border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-serif font-semibold text-[var(--color-text-primary)]">课表时间配置</h3>
+          <p className="text-xs text-[var(--color-text-muted)] mt-1">设置每天的节次数和每节课的时间</p>
+        </div>
+        <button
+          onClick={handleReset}
+          className="px-4 py-2 text-sm border border-[var(--color-border)] text-[var(--color-text-secondary)] rounded-lg
+                     hover:bg-[var(--color-bg-secondary)] transition-colors flex items-center gap-2"
+        >
+          <span>🔄</span>
+          <span>重置为默认</span>
+        </button>
+      </div>
+
+      <div className="p-6 flex-1 overflow-auto">
+        {/* 节次数调整 */}
+        <div className="mb-8 bg-white p-6 border border-[var(--color-border)] rounded-2xl shadow-sm">
+          <label className="block text-base font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+            <span>📊</span> 每天节次数
+          </label>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleRemovePeriod}
+              disabled={periodsPerDay <= 1}
+              className={`w-12 h-12 rounded-xl text-xl font-bold transition-all ${
+                periodsPerDay <= 1
+                  ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                  : 'bg-[var(--color-bg-secondary)] hover:bg-[var(--color-primary)] hover:text-white text-[var(--color-text-primary)]'
+              }`}
+            >
+              −
+            </button>
+            <div className="text-4xl font-bold font-serif text-[var(--color-primary)] w-20 text-center">
+              {periodsPerDay}
+            </div>
+            <button
+              onClick={handleAddPeriod}
+              disabled={periodsPerDay >= 12}
+              className={`w-12 h-12 rounded-xl text-xl font-bold transition-all ${
+                periodsPerDay >= 12
+                  ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                  : 'bg-[var(--color-bg-secondary)] hover:bg-[var(--color-primary)] hover:text-white text-[var(--color-text-primary)]'
+              }`}
+            >
+              +
+            </button>
+            <span className="text-sm text-[var(--color-text-muted)] ml-4">
+              节 / 天
+            </span>
+          </div>
+        </div>
+
+        {/* 节次时间表格 */}
+        <div className="bg-white p-6 border border-[var(--color-border)] rounded-2xl shadow-sm">
+          <label className="block text-base font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+            <span>⏰</span> 节次时间设置
+          </label>
+          <p className="text-xs text-[var(--color-text-muted)] mb-4">
+            设置每节课的开始和结束时间，以及是否属于上午时段
+          </p>
+
+          <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[var(--color-bg-secondary)] text-[var(--color-text-secondary)] text-sm">
+                  <th className="p-4 font-medium border-b border-[var(--color-border)] w-24">节次</th>
+                  <th className="p-4 font-medium border-b border-[var(--color-border)]">开始时间</th>
+                  <th className="p-4 font-medium border-b border-[var(--color-border)]">结束时间</th>
+                  <th className="p-4 font-medium border-b border-[var(--color-border)] w-32 text-center">上午/下午</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--color-border)]">
+                {periods.map((period) => (
+                  <tr key={period.period} className="hover:bg-[var(--color-bg-secondary)]/50 transition duration-150">
+                    <td className="p-4 font-medium">
+                      <div className="flex flex-col">
+                        <span>第{period.period}节</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          {period.isMorning ? '上午' : '下午'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <input
+                        type="time"
+                        value={period.startTime}
+                        onChange={(e) => handlePeriodChange(period.period, 'startTime', e.target.value)}
+                        className="w-32 px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm"
+                      />
+                    </td>
+                    <td className="p-4">
+                      <input
+                        type="time"
+                        value={period.endTime}
+                        onChange={(e) => handlePeriodChange(period.period, 'endTime', e.target.value)}
+                        className="w-32 px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm"
+                      />
+                    </td>
+                    <td className="p-4 text-center">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={period.isMorning}
+                          onChange={(e) => handlePeriodChange(period.period, 'isMorning', e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
+                        <span className="ml-2 text-xs text-[var(--color-text-muted)]">
+                          {period.isMorning ? '上午' : '下午'}
+                        </span>
+                      </label>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 配置预览 */}
+        <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
+          <div className="flex items-start gap-3">
+            <span className="text-xl">💡</span>
+            <div>
+              <h4 className="font-medium text-blue-800 mb-1">配置说明</h4>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• 当前配置：每天 <strong>{periodsPerDay}</strong> 节课，上午 <strong>{periods.filter(p => p.isMorning).length}</strong> 节，下午 <strong>{periods.filter(p => !p.isMorning).length}</strong> 节</li>
+                <li>• 修改配置后，课表页面和规则配置的时间网格将自动同步更新</li>
+                <li>• 时间设置主要用于显示，不影响排课算法的核心逻辑</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
