@@ -93,8 +93,8 @@ function canPlaceCourse(
     return false
   }
 
-  // 检查教师是否被占用
-  if (isSlotOccupied(context.occupancy.teachers, teacherId, dayOfWeek, period)) {
+  // 检查教师是否被占用（自习课的 teacherId 为空字符串时跳过此检查）
+  if (teacherId && isSlotOccupied(context.occupancy.teachers, teacherId, dayOfWeek, period)) {
     return false
   }
 
@@ -252,15 +252,19 @@ function placeFixedSlots(
       item.classId,
       slot.dayOfWeek,
       slot.period,
-      teacher
+      teacher,
+      undefined,
+      item.subject
     )
 
     if (canPlace) {
       const cell = createScheduleCell(item, slot.dayOfWeek as DayOfWeek, slot.period, true)
       cells.push(cell)
 
-      // 更新占用矩阵
-      markSlotOccupied(context.occupancy.teachers, item.teacherId, slot.dayOfWeek, slot.period, cell.id)
+      // 更新占用矩阵（自习课的 teacherId 为空时不占用教师时间）
+      if (item.teacherId) {
+        markSlotOccupied(context.occupancy.teachers, item.teacherId, slot.dayOfWeek, slot.period, cell.id)
+      }
       markSlotOccupied(context.occupancy.classes, item.classId, slot.dayOfWeek, slot.period, cell.id)
 
       // 更新学科分布
@@ -268,13 +272,30 @@ function placeFixedSlots(
 
       placed++
     } else {
+      // 检查具体是什么原因导致无法放置
+      const className = context.classes.get(item.classId)?.name || item.classId
+      const reason = []
+
+      // 检查班级占用
+      if (isSlotOccupied(context.occupancy.classes, item.classId, slot.dayOfWeek, slot.period)) {
+        reason.push('班级该时段已有课程')
+      }
+      // 检查教师占用（自习课跳过）
+      if (item.teacherId && isSlotOccupied(context.occupancy.teachers, item.teacherId, slot.dayOfWeek, slot.period)) {
+        reason.push('教师该时段已有课程')
+      }
+      // 检查教师避开时段
+      if (teacher && isSlotInAvoidList({ dayOfWeek: slot.dayOfWeek, period: slot.period }, teacher.avoidTimeSlots)) {
+        reason.push('教师避开该时段')
+      }
+
       conflicts.push({
         id: `conflict_${item.id}_${slot.dayOfWeek}_${slot.period}`,
-        type: ConflictType.TeacherOverlap,
+        type: ConflictType.ClassOverlap,
         severity: 'error',
         cellIds: [],
-        message: `无法将 ${item.subject} 放置在固定时段 周${slot.dayOfWeek}第${slot.period}节`,
-        suggestion: '该时段已被占用或与教师避开时段冲突'
+        message: `无法将 ${item.subject}（${className}）放置在固定时段 周${slot.dayOfWeek}第${slot.period}节`,
+        suggestion: reason.join('；') || '未知原因'
       })
     }
   }
@@ -385,7 +406,10 @@ function placeConsecutiveCourse(
         const cell = createScheduleCell(item, bestSlot.dayOfWeek, p, false)
         cells.push(cell)
 
-        markSlotOccupied(context.occupancy.teachers, item.teacherId, bestSlot.dayOfWeek, p, cell.id)
+        // 更新占用矩阵（自习课的 teacherId 为空时不占用教师时间）
+        if (item.teacherId) {
+          markSlotOccupied(context.occupancy.teachers, item.teacherId, bestSlot.dayOfWeek, p, cell.id)
+        }
         markSlotOccupied(context.occupancy.classes, item.classId, bestSlot.dayOfWeek, p, cell.id)
 
         incrementSubjectCount(subjectDistribution, item.classId, bestSlot.dayOfWeek, item.subject)
@@ -444,12 +468,21 @@ function findBestRegularSlot(
           preferenceScore = period > 4 ? -50 : 100
         }
 
+        // 自习课特殊处理：倾向于选择后面的节次（最后一节最优）
+        // 将 period 反向加权，越靠后的节次分数越低
+        let periodScore = period
+        if (item.subject === Subject.SelfStudy) {
+          periodScore = (DEFAULT_PERIODS_PER_DAY - period + 1) * 10 // 第8节得分最低（最优），第1节得分最高
+        }
+
         // 分数越低越好
-        // 当天该学科课程越少越好，节次越靠前越好
+        // 当天该学科课程越少越好
+        // 普通课程：节次越靠前越好（period 小）
+        // 自习课：节次越靠后越好（period 大，但 periodScore 让它变优）
         slotScores.push({
           day,
           period,
-          score: currentCount * 100 + period + preferenceScore
+          score: currentCount * 100 + periodScore + preferenceScore
         })
       }
     }
@@ -491,7 +524,10 @@ function placeRegularCourse(
       const cell = createScheduleCell(item, bestSlot.dayOfWeek, bestSlot.period, false)
       cells.push(cell)
 
-      markSlotOccupied(context.occupancy.teachers, item.teacherId, bestSlot.dayOfWeek, bestSlot.period, cell.id)
+      // 更新占用矩阵（自习课的 teacherId 为空时不占用教师时间）
+      if (item.teacherId) {
+        markSlotOccupied(context.occupancy.teachers, item.teacherId, bestSlot.dayOfWeek, bestSlot.period, cell.id)
+      }
       markSlotOccupied(context.occupancy.classes, item.classId, bestSlot.dayOfWeek, bestSlot.period, cell.id)
 
       incrementSubjectCount(subjectDistribution, item.classId, bestSlot.dayOfWeek, item.subject)

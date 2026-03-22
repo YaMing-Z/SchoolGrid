@@ -173,6 +173,35 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
     })
   }
 
+  // 6. 补充「自习」等特殊自动排课科目
+  // 在处理完 input.assignments 后，检查系统规则中是否有自习课
+  const selfStudyRule = subjectRules.find(r => r.subject === Subject.SelfStudy)
+  if (selfStudyRule) {
+    classesMap.forEach(classEntity => {
+      // 检查这个班是否已经排了自习课（可能有人在 Excel 里填了）
+      const hasSelfStudy = curriculumItems.some(i => i.classId === classEntity.id && i.subject === Subject.SelfStudy)
+      if (!hasSelfStudy) {
+        // 如果没有排，自动添加自习课（教师待安排）
+        // 获取自习课的固定课位
+        const selfStudyFixedSlots = subjectTimeRules
+          .filter(r => r.subject === Subject.SelfStudy && r.type === 'fixed')
+          .map(r => ({ dayOfWeek: r.dayOfWeek, period: r.period }))
+
+        curriculumItems.push({
+          id: `curr_${classEntity.id}_self_study_auto`,
+          classId: classEntity.id,
+          subject: Subject.SelfStudy,
+          teacherId: '', // 自习课教师待安排，由用户手动选择
+          weeklyHours: selfStudyRule.weeklyHours,
+          isConsecutive: selfStudyRule.isConsecutive,
+          consecutiveCount: selfStudyRule.consecutiveCount,
+          fixedSlots: selfStudyFixedSlots.length > 0 ? selfStudyFixedSlots : undefined, // 注入固定课位
+          priority: selfStudyFixedSlots.length > 0 ? 14 : (selfStudyRule.weeklyHours > 0 ? 4 : 0) // 自习课固定课位时优先级高
+        })
+      }
+    })
+  }
+
   return {
     teachers: Array.from(teachersMap.values()),
     classes: Array.from(classesMap.values()),

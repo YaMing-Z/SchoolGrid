@@ -116,8 +116,8 @@ export const useRuleStore = create<RuleState>()(
       },
 
       cleanupInvalidRules: (validTeacherIds, validSubjects) => set((state) => {
-        // 班会是内置的基础课，始终保留它的规则
-        const safeSubjects = [...validSubjects, '班会']
+        // 班会、自习是内置的基础课，始终保留它们的规则
+        const safeSubjects = [...validSubjects, '班会', '自习']
         
         const newSubjectRules = state.subjectRules.filter(r => safeSubjects.includes(r.subject))
         const newSubjectTimeRules = state.subjectTimeRules.filter(r => safeSubjects.includes(r.subject))
