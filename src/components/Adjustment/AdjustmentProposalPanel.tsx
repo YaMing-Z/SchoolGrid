@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { SUBJECT_NAMES } from '@/data/constants'
 import { AdjustmentPriority } from '@/types/adjustment.types'
-import html2canvas from 'html2canvas'
 
 const priorityConfig = {
   [AdjustmentPriority.P0]: {
@@ -29,7 +28,6 @@ const DAYS = ['周一', '周二', '周三', '周四', '周五']
 
 export function AdjustmentProposalPanel() {
   const { currentProposal, clearProposal, teachers, classes } = useScheduleStore()
-  const [isExporting, setIsExporting] = useState(false)
   const [copied, setCopied] = useState(false)
 
   if (!currentProposal) return null
@@ -50,38 +48,74 @@ export function AdjustmentProposalPanel() {
     return `${DAYS[dayOfWeek - 1]}第${period}节`
   }
 
-  // 导出为图片
-  const handleExportImage = async () => {
-    const panel = document.getElementById('proposal-panel')
-    if (!panel) return
-
-    setIsExporting(true)
-    try {
-      const canvas = await html2canvas(panel, {
-        backgroundColor: '#ffffff',
-        scale: 2
-      })
-      const link = document.createElement('a')
-      link.download = `调课方案_${new Date().toLocaleDateString()}.png`
-      link.href = canvas.toDataURL()
-      link.click()
-    } catch (error) {
-      console.error('导出图片失败:', error)
-    } finally {
-      setIsExporting(false)
-    }
+  // 获取目标位置的课程信息
+  const getTargetCellInfo = () => {
+    if (!currentProposal.targetCell) return null
+    return currentProposal.targetCell
   }
+
+  const targetCell = getTargetCellInfo()
 
   // 复制方案文字
   const handleCopyText = async () => {
-    const text = `
-【调课方案】
-班级：${getClassName(currentProposal.originalCell.classId)}
-原课程：${formatSlot(currentProposal.originalCell.dayOfWeek as number, currentProposal.originalCell.period)} ${SUBJECT_NAMES[currentProposal.originalCell.subject]} - ${getTeacherName(currentProposal.originalCell.teacherId)}
-调整为：${formatSlot(currentProposal.targetSlot.dayOfWeek, currentProposal.targetSlot.period)}
-优先级：${config.name}
-评分：${currentProposal.score}分
-${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.violations.map(v => `• ${v}`).join('\n')}` : ''}
+    const originalCell = currentProposal.originalCell
+    const targetSlot = currentProposal.targetSlot
+
+    let text = `
+═══════════════════════════════════════
+           📅 调课方案详情
+═══════════════════════════════════════
+
+📋 基本信息
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+班级：${getClassName(originalCell.classId)}
+优先级：${config.label} - ${config.name}
+综合评分：${currentProposal.score}分
+方案类型：${targetCell ? '课程互换' : '调整到空位'}
+
+🔴 原课程信息
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+时间：${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}
+课程：${SUBJECT_NAMES[originalCell.subject]}
+教师：${getTeacherName(originalCell.teacherId)}
+班级：${getClassName(originalCell.classId)}
+
+${targetCell ? `🟢 目标位置现有课程
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+时间：${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
+课程：${SUBJECT_NAMES[targetCell.subject]}
+教师：${getTeacherName(targetCell.teacherId)}
+班级：${getClassName(targetCell.classId)}
+
+📊 调整后安排
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${SUBJECT_NAMES[originalCell.subject]} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
+${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}${SUBJECT_NAMES[targetCell.subject]} → ${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}` : `🟢 目标位置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+时间：${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
+状态：空闲时段（原课程将移动至此）
+
+📊 调整后安排
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${SUBJECT_NAMES[originalCell.subject]} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}`}
+
+${currentProposal.impact ? `
+👥 影响范围
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${currentProposal.impact.affectedTeachers?.length ? `受影响教师：${currentProposal.impact.affectedTeachers.map(getTeacherName).join('、')}` : ''}
+${currentProposal.impact.affectedClasses?.length ? `受影响班级：${currentProposal.impact.affectedClasses.map(getClassName).join('、')}` : ''}
+干扰程度：${currentProposal.impact.disruptionLevel === 'low' ? '🟢 低' : currentProposal.impact.disruptionLevel === 'medium' ? '🟡 中' : '🔴 高'}
+` : ''}
+
+${currentProposal.violations.length > 0 ? `
+⚠️  注意事项
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${currentProposal.violations.map(v => `• ${v.message}${v.suggestion ? `\n  建议：${v.suggestion}` : ''}`).join('\n')}
+` : ''}
+
+═══════════════════════════════════════
+生成时间：${new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+═══════════════════════════════════════
     `.trim()
 
     try {
@@ -138,63 +172,50 @@ ${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.
               <div className="text-xs text-red-500 mt-1">
                 {getTeacherName(currentProposal.originalCell.teacherId)}
               </div>
+              <div className="text-xs text-red-400 mt-1">
+                {getClassName(currentProposal.originalCell.classId)}
+              </div>
             </div>
 
-            {/* 箭头 */}
-            <div className="text-2xl text-gray-400">→</div>
+            {/* 双向箭头 */}
+            <div className="flex items-center justify-center text-gray-400">
+              <svg width="32" height="24" viewBox="0 0 32 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="12" x2="28" y2="12"></line>
+                <polyline points="12 5 4 12 12 19"></polyline>
+                <polyline points="20 5 28 12 20 19"></polyline>
+              </svg>
+            </div>
 
-            {/* 目标位置 */}
-            <div className="flex-1 p-4 rounded-xl bg-green-50 border border-green-200">
-              <div className="text-xs text-green-600 font-medium mb-2">目标位置</div>
-              <div className="text-lg font-semibold text-green-700">
+            {/* 目标位置 - 显示原有课程信息 */}
+            <div className={`flex-1 p-4 rounded-xl border ${targetCell ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+              <div className={`text-xs font-medium mb-2 ${targetCell ? 'text-orange-600' : 'text-green-600'}`}>
+                {targetCell ? '目标位置（现有课程）' : '目标位置（空闲时段）'}
+              </div>
+              <div className={`text-lg font-semibold ${targetCell ? 'text-orange-700' : 'text-green-700'}`}>
                 {formatSlot(currentProposal.targetSlot.dayOfWeek, currentProposal.targetSlot.period)}
               </div>
-              <div className="text-sm text-green-600 mt-1">
-                {SUBJECT_NAMES[currentProposal.originalCell.subject]}
-              </div>
-              <div className="text-xs text-green-500 mt-1">
-                {getTeacherName(currentProposal.originalCell.teacherId)}
-              </div>
+              {targetCell ? (
+                <>
+                  <div className="text-sm text-orange-600 mt-1">
+                    {SUBJECT_NAMES[targetCell.subject]}
+                  </div>
+                  <div className="text-xs text-orange-500 mt-1">
+                    {getTeacherName(targetCell.teacherId)}
+                  </div>
+                  <div className="text-xs text-orange-400 mt-1">
+                    {getClassName(targetCell.classId)}
+                  </div>
+                </>
+              ) : (
+                <div className="text-sm text-green-500 mt-1">
+                  原课程将移动至此
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* 方案评估 */}
-        <div className="p-5 border-b border-[var(--color-border)] bg-gray-50">
-          <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
-            <span>📊</span> 方案评估
-          </h4>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500">优先级：</span>
-              <span 
-                className="px-2 py-0.5 rounded text-white text-sm font-medium"
-                style={{ backgroundColor: config.color }}
-              >
-                {config.label} {config.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-500">综合评分：</span>
-              <span className="font-bold text-lg" style={{ color: config.color }}>
-                {currentProposal.score}分
-              </span>
-            </div>
-          </div>
-          
-          {currentProposal.violations.length > 0 && (
-            <div className="mt-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
-              <div className="text-sm font-medium text-yellow-700 mb-1">⚠️ 注意事项</div>
-              <ul className="text-xs text-yellow-600 space-y-1">
-                {currentProposal.violations.map((v, i) => (
-                  <li key={i}>• {v.message}{v.suggestion && ` - ${v.suggestion}`}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {/* 影响信息 */}
+        {/* 影响信息 - 移到方案评估上方 */}
         {currentProposal.impact && (
           <div className="p-5 border-b border-[var(--color-border)] bg-blue-50">
             <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
@@ -218,7 +239,7 @@ ${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.
                   </div>
                 </div>
               )}
-              
+
               {/* 受影响的班级 */}
               {currentProposal.impact.affectedClasses && currentProposal.impact.affectedClasses.length > 0 && (
                 <div>
@@ -235,7 +256,7 @@ ${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.
                   </div>
                 </div>
               )}
-              
+
               {/* 干扰程度 */}
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-500">干扰程度：</span>
@@ -251,18 +272,43 @@ ${currentProposal.violations.length > 0 ? `\n注意事项：\n${currentProposal.
           </div>
         )}
 
-        {/* 操作按钮 */}
+        {/* 方案评估 */}
+        <div className="p-5 border-b border-[var(--color-border)] bg-gray-50">
+          <h4 className="font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <span>📊</span> 方案评估
+          </h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">优先级：</span>
+              <span
+                className="px-2 py-0.5 rounded text-white text-sm font-medium"
+                style={{ backgroundColor: config.color }}
+              >
+                {config.label} {config.name}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500">综合评分：</span>
+              <span className="font-bold text-lg" style={{ color: config.color }}>
+                {currentProposal.score}分
+              </span>
+            </div>
+          </div>
+
+          {currentProposal.violations.length > 0 && (
+            <div className="mt-4 p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+              <div className="text-sm font-medium text-yellow-700 mb-1">⚠️ 注意事项</div>
+              <ul className="text-xs text-yellow-600 space-y-1">
+                {currentProposal.violations.map((v, i) => (
+                  <li key={i}>• {v.message}{v.suggestion && ` - ${v.suggestion}`}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {/* 操作按钮 - 移除导出图片功能 */}
         <div className="p-5 flex gap-3">
-          <button
-            onClick={handleExportImage}
-            disabled={isExporting}
-            className="flex-1 py-3 px-4 rounded-xl border border-[var(--color-border)]
-                       text-[var(--color-text-secondary)] font-medium
-                       hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
-          >
-            <span>📷</span>
-            <span>{isExporting ? '导出中...' : '导出图片'}</span>
-          </button>
           <button
             onClick={handleCopyText}
             className="flex-1 py-3 px-4 rounded-xl border border-[var(--color-border)]

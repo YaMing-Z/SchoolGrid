@@ -9,6 +9,7 @@ import { runGreedyScheduler } from '@/algorithms/scheduler/greedyScheduler'
 import { AdjustmentEngine } from '@/algorithms/adjustment'
 import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
 import { useRuleStore } from '@/stores/ruleStore'
+import { Subject } from '@/data/constants'
 
 /**
  * 将旧版错误码数组转换为结构化冲突详情
@@ -35,6 +36,23 @@ function convertViolationsToConflictDetails(violations: string[]): ConflictDetai
       details: { reason: message }
     }
   })
+}
+
+/**
+ * 查找指定班级、星期、节次的课程单元格
+ */
+function findCellAtSlot(
+  schedule: SchoolSchedule | null,
+  classId: string,
+  dayOfWeek: number,
+  period: number
+): ScheduleCell | null {
+  if (!schedule) return null
+
+  const classSchedule = schedule.classSchedules.find(s => s.classId === classId)
+  if (!classSchedule) return null
+
+  return classSchedule.cells.find(c => c.dayOfWeek === dayOfWeek && c.period === period) || null
 }
 
 export type ViewMode = 'dashboard' | 'schedule' | 'import' | 'rules'
@@ -149,6 +167,9 @@ interface ScheduleState {
   // Tooltip 操作
   showTooltip: (conflict: ConflictDetail, position: { x: number; y: number; placement: 'top' | 'bottom' | 'left' | 'right' }) => void
   hideTooltip: () => void
+
+  // 自习课教师分配
+  assignSelfStudyTeacher: (cellId: string, teacherId: string) => void
 
   // 数据持久化
   exportData: () => string
@@ -359,7 +380,7 @@ export const useScheduleStore = create<ScheduleState>()(
       setAdjustmentModeType: (mode) => set({ adjustmentModeType: mode }),
 
       startDrag: (cell) => {
-        const { teachers, classes, schedule } = get()
+        const { teachers, classes, schedule, selectedClassId } = get()
         if (!schedule) return
 
         // 计算所有可能的放置目标
@@ -472,23 +493,57 @@ export const useScheduleStore = create<ScheduleState>()(
               } else {
                 // 教师没有在该时段有课，但也没有可行的建议
                 // 分析具体原因并提供更有意义的提示
-                const targetCellDay = cell.dayOfWeek
-                const isSameDay = day === targetCellDay
-                
+
+                // 计算是否同一天（用于后续判断）
+                const isSameDay = day === cell.dayOfWeek
+
+                // 检查目标位置是否有课程（可能是其他教师或自习课）
+                const targetCell = findCellAtSlot(schedule, selectedClassId || '', day, period)
+
                 let conflictMessage = ''
                 let conflictType = AdjustmentConflictType.TeacherUnavailable
                 let suggestionTip = ''
-                
-                if (isSameDay) {
-                  // 同一天但没有可互换的课程
-                  conflictMessage = '当天无其他课程可互换'
-                  suggestionTip = '该教师当天只有这一节课，无法进行同日互换'
+
+                if (targetCell) {
+                  // 目标位置有课程
+                  if (targetCell.isFixed) {
+                    // 目标是固定排课课程
+                    const subjectName = (() => {
+                      if (targetCell.subject === Subject.Meeting) return '班会课'
+                      if (targetCell.subject === Subject.SelfStudy) return '自习课'
+                      return `${targetCell.subject}课`
+                    })()
+
+                    conflictMessage = `${subjectName}为固定排课`
+                    conflictType = AdjustmentConflictType.FixedCourse
+                    suggestionTip = '固定排课的课程无法调换，请在规则配置中修改后再排课'
+                  } else {
+                    // 目标是非固定课程，但可能是不同班级/教师的课程
+                    const targetClass = classes.find(c => c.id === targetCell.classId)
+                    const targetTeacher = teachers.find(t => t.id === targetCell.teacherId)
+
+                    if (targetClass && targetClass.id !== selectedClassId) {
+                      conflictMessage = `该位置为${targetClass.name}的课程`
+                      suggestionTip = '不同班级的课程无法直接调换'
+                    } else if (targetTeacher && targetTeacher.id !== cell.teacherId) {
+                      conflictMessage = `该位置为${targetTeacher.name}的${targetCell.subject}课`
+                      suggestionTip = '不同教师的课程无法直接调换'
+                    } else {
+                      conflictMessage = '目标时段课程无法互换'
+                      suggestionTip = '该课程可能存在其他限制，无法进行互换'
+                    }
+                  }
                 } else {
-                  // 跨日但没有可互换的课程
-                  conflictMessage = '目标时段无课程可互换'
-                  suggestionTip = '该时段为空，无法进行课程互换。可尝试拖拽到有课程的位置进行交换'
+                  // 目标位置为空
+                  if (isSameDay) {
+                    conflictMessage = '当天无其他课程可互换'
+                    suggestionTip = '该教师当天只有这一节课，无法进行同日互换'
+                  } else {
+                    conflictMessage = '目标时段无课程可互换'
+                    suggestionTip = '该时段为空，无法进行课程互换。可尝试拖拽到有课程的位置进行交换'
+                  }
                 }
-                
+
                 dropTargets.set(targetKey, {
                   cellId: targetKey,
                   dayOfWeek: day,
@@ -609,19 +664,22 @@ export const useScheduleStore = create<ScheduleState>()(
         const targetInfo = dropTargets.get(targetCellId)
         if (!targetInfo || !targetInfo.isValid) return
 
+        // 获取目标位置的单元格信息
+        const targetCell = findCellAtSlot(schedule, draggedCell.classId, targetInfo.dayOfWeek, targetInfo.period)
+
         // 如果是建议模式，创建方案而不是直接应用
         if (adjustmentModeType === 'suggest') {
           const proposal: AdjustmentProposal = {
             id: `proposal_${Date.now()}`,
             originalCell: draggedCell,
             targetSlot: { dayOfWeek: targetInfo.dayOfWeek, period: targetInfo.period },
-            targetCell: null, // TODO: 如果目标有课程，需要填充
+            targetCell: targetCell,
             priority: targetInfo.priority!,
             score: targetInfo.score,
             violations: targetInfo.violations,
             operations: targetInfo.operations,
-            impact: targetInfo.impact,  // 传递影响信息
-            description: targetInfo.description,  // 传递描述信息
+            impact: targetInfo.impact,
+            description: targetInfo.description,
             createdAt: new Date()
           }
           set({ currentProposal: proposal, isDragging: false, draggedCell: null })
@@ -671,17 +729,20 @@ export const useScheduleStore = create<ScheduleState>()(
       },
 
       createProposal: (targetCellId) => {
-        const { dropTargets, draggedCell } = get()
-        if (!draggedCell) return
+        const { dropTargets, draggedCell, schedule } = get()
+        if (!draggedCell || !schedule) return
 
         const targetInfo = dropTargets.get(targetCellId)
         if (!targetInfo) return
+
+        // 获取目标位置的单元格信息
+        const targetCell = findCellAtSlot(schedule, draggedCell.classId, targetInfo.dayOfWeek, targetInfo.period)
 
         const proposal: AdjustmentProposal = {
           id: `proposal_${Date.now()}`,
           originalCell: draggedCell,
           targetSlot: { dayOfWeek: targetInfo.dayOfWeek, period: targetInfo.period },
-          targetCell: null,
+          targetCell: targetCell,
           priority: targetInfo.priority!,
           score: targetInfo.score,
           violations: targetInfo.violations,
@@ -714,6 +775,36 @@ export const useScheduleStore = create<ScheduleState>()(
           visible: false
         }
       }),
+
+      assignSelfStudyTeacher: (cellId: string, teacherId: string) => {
+        const { schedule } = get()
+        if (!schedule) return
+
+        // 更新课表中的自习课教师
+        const updatedSchedules = schedule.classSchedules.map(classSchedule => {
+          const updatedCells = classSchedule.cells.map(cell => {
+            if (cell.id === cellId) {
+              return {
+                ...cell,
+                teacherId
+              }
+            }
+            return cell
+          })
+
+          return {
+            ...classSchedule,
+            cells: updatedCells
+          }
+        })
+
+        set({
+          schedule: {
+            ...schedule,
+            classSchedules: updatedSchedules
+          }
+        })
+      },
 
       exportData: () => {
         const { teachers, classes, curriculumItems, schedule } = get()
