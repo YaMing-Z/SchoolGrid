@@ -55,54 +55,94 @@ export function findSameDaySwaps(
     const candidateTeacherAvailable = !teacherAvailability ||
       teacherAvailability.get(candidateCell.teacherId)?.has(`${targetCell.dayOfWeek}_${targetCell.period}`) !== false
 
-    // [P0-3 修复] 3. 目标学科莫备召兰进入候选时段
+    // [P0-3 修复] 3. 目标学科将进入候选时段
     const targetSubjectAllowed = !subjectForbiddenSlots ||
       !subjectForbiddenSlots.get(targetCell.subject)?.has(`${candidateCell.dayOfWeek}_${candidateCell.period}`)
 
-    // [P0-3 修复] 4. 候选学科即将进入目标时段，检查是否禁排
+    // [P0-3 修复] 4. 候选学科将进入目标时段，检查是否禁排
     const candidateSubjectAllowed = !subjectForbiddenSlots ||
       !subjectForbiddenSlots.get(candidateCell.subject)?.has(`${targetCell.dayOfWeek}_${targetCell.period}`)
 
-    if (targetTeacherAvailable && candidateTeacherAvailable && targetSubjectAllowed && candidateSubjectAllowed) {
-      // 生成互换建议
-      const operations: ScheduleOperation[] = [
-        {
-          type: OperationType.Swap,
-          cellId: targetCell.id,
-          fromSlot: { dayOfWeek: targetDay, period: targetCell.period },
-          toSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period }
-        },
-        {
-          type: OperationType.Swap,
-          cellId: candidateCell.id,
-          fromSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period },
-          toSlot: { dayOfWeek: targetDay, period: targetCell.period }
-        }
-      ]
+    // 计算评分
+    const score = calculateSwapScore(targetCell, candidateCell)
 
-      const impact: AdjustmentImpact = {
-        affectedClasses: [targetCell.classId],
-        affectedTeachers: [targetCell.teacherId, candidateCell.teacherId],
-        affectedStudents: 0, // 需要外部填充
-        disruptionLevel: 'low',
-        studentImpact: 'minor'
+    // 检查是否可行（硬约束：教师可用性、学科禁排）
+    const isHardConstraintValid = targetTeacherAvailable && candidateTeacherAvailable && targetSubjectAllowed && candidateSubjectAllowed
+
+    // 生成互换建议
+    const operations: ScheduleOperation[] = [
+      {
+        type: OperationType.Swap,
+        cellId: targetCell.id,
+        fromSlot: { dayOfWeek: targetDay, period: targetCell.period },
+        toSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period }
+      },
+      {
+        type: OperationType.Swap,
+        cellId: candidateCell.id,
+        fromSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period },
+        toSlot: { dayOfWeek: targetDay, period: targetCell.period }
       }
+    ]
 
-      const suggestion: AdjustmentSuggestion = {
-        id: `p0_swap_${targetCell.id}_${candidateCell.id}`,
-        requestId: '', // 外部填充
-        priority: AdjustmentPriority.P0,
-        strategy: AdjustmentStrategy.SameDaySwap,
-        description: `与 ${SUBJECT_NAMES[candidateCell.subject as Subject] || candidateCell.subject}（第${candidateCell.period}节）互换`,
-        impact,
-        operations,
-        isValid: true,
-        violations: [],
-        score: calculateSwapScore(targetCell, candidateCell)
-      }
-
-      suggestions.push(suggestion)
+    const impact: AdjustmentImpact = {
+      affectedClasses: [targetCell.classId],
+      affectedTeachers: [targetCell.teacherId, candidateCell.teacherId],
+      affectedStudents: 0,
+      disruptionLevel: 'low',
+      studentImpact: 'minor'
     }
+
+    // 生成违规/警告信息
+    const violations: string[] = []
+
+    // 只有硬约束冲突才标记为无效
+    const isValid = isHardConstraintValid
+
+    if (!isHardConstraintValid) {
+      // 硬约束冲突：这些才是真正无法互换的原因
+      if (!targetTeacherAvailable) violations.push('目标教师时间冲突')
+      if (!candidateTeacherAvailable) violations.push('候选教师时间冲突')
+      if (!targetSubjectAllowed) violations.push('目标学科禁排时段')
+      if (!candidateSubjectAllowed) violations.push('候选学科禁排时段')
+    } else if (score < 110) {
+      // 评分较低但可以互换，添加警告信息
+      const warnings: string[] = []
+      if (targetCell.subject !== candidateCell.subject) {
+        warnings.push('不同学科互换')
+      }
+      if (Math.abs(targetCell.period - candidateCell.period) > 2) {
+        warnings.push('节次相差较大')
+      }
+      // 即使没有具体原因，也添加评分警告
+      if (warnings.length > 0) {
+        violations.push(`评分较低：${warnings.join('、')}`)
+      } else {
+        violations.push(`评分较低：${score}分`)
+      }
+      console.log('[p0SameDaySwap] Low score warning added:', {
+        targetCell: { id: targetCell.id, subject: targetCell.subject, period: targetCell.period },
+        candidateCell: { id: candidateCell.id, subject: candidateCell.subject, period: candidateCell.period },
+        score,
+        violations,
+        warnings
+      })
+    }
+
+    const suggestion: AdjustmentSuggestion = {
+      id: `p0_swap_${targetCell.id}_${candidateCell.id}`,
+      requestId: '',
+      priority: AdjustmentPriority.P0,
+      strategy: AdjustmentStrategy.SameDaySwap,
+      description: `与 ${SUBJECT_NAMES[candidateCell.subject as Subject] || candidateCell.subject}（第${candidateCell.period}节）互换`,
+      impact,
+      operations,
+      isValid,
+      violations,
+      score
+    }
+
+    suggestions.push(suggestion)
   }
 
   // 按评分排序

@@ -134,42 +134,46 @@ export class AdjustmentEngine {
     // P0: 同班同日互换
     if (this.config.enableP0) {
       const p0Suggestions = findSameDaySwaps(targetCell, classCells, undefined, this.subjectForbiddenSlots)
-        .slice(0, this.config.maxSuggestions)
+        // 不要截取！包含所有可行的建议（包括低评分的）
+        // .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
 
       allSuggestions.push(...p0Suggestions)
     }
 
-    // P1: 同班跨日互换（移除数量限制，确保总是执行）
+    // P1: 同班跨日互换（移除数量限制，包含所有可行建议）
     if (this.config.enableP1) {
       const p1Suggestions = findCrossDaySwaps(targetCell, classCells, undefined, this.subjectForbiddenSlots)
-        .slice(0, this.config.maxSuggestions)
+        // 不要截取！包含所有可行的建议（包括低评分的）
+        // .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
 
       console.log('[AdjustmentEngine] P1 cross-day suggestions:', {
         targetCellId: targetCell.id,
         classCellsCount: classCells.length,
-        p1Count: p1Suggestions.length
+        p1Count: p1Suggestions.length,
+        p1Scores: p1Suggestions.map(s => s.score)
       })
 
       allSuggestions.push(...p1Suggestions)
     }
 
     // P2: 同科代课
-    if (this.config.enableP2 && allSuggestions.length < this.config.maxSuggestions) {
+    if (this.config.enableP2) {
       const p2Suggestions = findSubstitutes(
         targetCell,
         this.teachers,
         this.teacherSchedules
       )
-        .slice(0, this.config.maxSuggestions)
+        // 不要截取！包含所有可行的建议（包括低评分的）
+        // .slice(0, this.config.maxSuggestions)
         .map(s => ({ ...s, requestId: request.id }))
 
       allSuggestions.push(...p2Suggestions)
     }
 
     // 按优先级和评分排序
-    return allSuggestions.sort((a, b) => {
+    const sortedSuggestions = allSuggestions.sort((a, b) => {
       // 先按优先级排序
       if (a.priority !== b.priority) {
         return a.priority - b.priority
@@ -177,6 +181,22 @@ export class AdjustmentEngine {
       // 同优先级按评分排序
       return b.score - a.score
     })
+
+    // 调试日志：显示所有生成的建议，包括低评分的
+    console.log('[AdjustmentEngine] All suggestions generated:', {
+      targetCellId: request.targetCellId,
+      totalCount: sortedSuggestions.length,
+      lowScoreWarnings: sortedSuggestions.filter(s => s.score < 110 && s.priority === 0).map(s => ({
+        id: s.id,
+        priority: s.priority,
+        score: s.score,
+        isValid: s.isValid,
+        violations: s.violations
+      })),
+      allScores: sortedSuggestions.map(s => `${s.priority === 0 ? 'P0' : s.priority === 1 ? 'P1' : 'P2'}:${s.score}`)
+    })
+
+    return sortedSuggestions
   }
 
   /**

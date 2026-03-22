@@ -213,23 +213,7 @@ export function ConflictTooltip({ visible, conflict, position, onClose }: Confli
           </div>
         </div>
       )}
-      
-      {/* 快捷操作按钮 */}
-      <div className="mt-3 flex gap-2">
-        <button
-          onClick={onClose}
-          className="text-xs px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-        >
-          关闭
-        </button>
-        <button
-          onClick={onClose}
-          className="text-xs px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50 transition-colors"
-        >
-          查看其他时段
-        </button>
-      </div>
-      
+
       {/* 小箭头指示器 */}
       <div
         className={`absolute w-3 h-3 ${severityStyles.bg} ${severityStyles.border}`}

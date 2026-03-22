@@ -59,55 +59,105 @@ export function findCrossDaySwaps(
   })
 
   for (const candidateCell of crossDayCells) {
-    // 检查互换后是否可行
-    const canSwap = canCrossDaySwap(targetCell, candidateCell, teacherAvailability, subjectForbiddenSlots)
+    // 检查硬约束
+    const fixedCourseConflict = targetCell.isFixed || candidateCell.isFixed
+    const sameDayConflict = targetCell.dayOfWeek === candidateCell.dayOfWeek
 
-    console.log('[findCrossDaySwaps] Checking candidate:', {
-      candidateId: candidateCell.id,
-      candidateDay: candidateCell.dayOfWeek,
-      candidatePeriod: candidateCell.period,
-      canSwap
-    })
-
-    if (canSwap) {
-      const operations: ScheduleOperation[] = [
-        {
-          type: OperationType.Swap,
-          cellId: targetCell.id,
-          fromSlot: { dayOfWeek: targetCell.dayOfWeek, period: targetCell.period },
-          toSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period }
-        },
-        {
-          type: OperationType.Swap,
-          cellId: candidateCell.id,
-          fromSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period },
-          toSlot: { dayOfWeek: targetCell.dayOfWeek, period: targetCell.period }
-        }
-      ]
-
-      const impact: AdjustmentImpact = {
-        affectedClasses: [targetCell.classId],
-        affectedTeachers: [targetCell.teacherId, candidateCell.teacherId],
-        affectedStudents: 0,
-        disruptionLevel: 'medium', // 跨日影响较大
-        studentImpact: 'minor'
-      }
-
-      const suggestion: AdjustmentSuggestion = {
-        id: `p1_swap_${targetCell.id}_${candidateCell.id}`,
-        requestId: '',
-        priority: AdjustmentPriority.P1,
-        strategy: AdjustmentStrategy.CrossDaySwap,
-        description: `与周${candidateCell.dayOfWeek}第${candidateCell.period}节的${SUBJECT_NAMES[candidateCell.subject as Subject] || candidateCell.subject}互换`,
-        impact,
-        operations,
-        isValid: true,
-        violations: [],
-        score: calculateCrossDaySwapScore(targetCell, candidateCell)
-      }
-
-      suggestions.push(suggestion)
+    // 检查教师可用性
+    let teacherConflict = false
+    if (teacherAvailability) {
+      const targetTeacherAvailable = teacherAvailability
+        .get(targetCell.teacherId)
+        ?.has(`${candidateCell.dayOfWeek}_${candidateCell.period}`)
+      const candidateTeacherAvailable = teacherAvailability
+        .get(candidateCell.teacherId)
+        ?.has(`${targetCell.dayOfWeek}_${targetCell.period}`)
+      teacherConflict = targetTeacherAvailable === false || candidateTeacherAvailable === false
     }
+
+    // 检查学科禁排
+    let subjectConflict = false
+    if (subjectForbiddenSlots) {
+      const targetSubjectForbidden = subjectForbiddenSlots.get(targetCell.subject)?.has(`${candidateCell.dayOfWeek}_${candidateCell.period}`)
+      const candidateSubjectForbidden = subjectForbiddenSlots.get(candidateCell.subject)?.has(`${targetCell.dayOfWeek}_${targetCell.period}`)
+      subjectConflict = !!targetSubjectForbidden || !!candidateSubjectForbidden
+    }
+
+    // 计算评分
+    const score = calculateCrossDaySwapScore(targetCell, candidateCell)
+
+    // 判断是否可行
+    const isHardConstraintValid = !fixedCourseConflict && !sameDayConflict && !teacherConflict && !subjectConflict
+
+    // 生成违规/警告信息
+    const violations: string[] = []
+
+    // 只有硬约束冲突才标记为无效
+    const isValid = isHardConstraintValid
+
+    if (!isHardConstraintValid) {
+      // 硬约束冲突：这些才是真正无法互换的原因
+      if (fixedCourseConflict) violations.push('涉及固定课程')
+      if (teacherConflict) violations.push('教师时间冲突')
+      if (subjectConflict) violations.push('学科禁排时段')
+    } else if (score < 90) {
+      // 评分较低但可以互换，添加警告信息
+      const warnings: string[] = []
+      if (targetCell.subject !== candidateCell.subject) {
+        warnings.push('不同学科互换')
+      }
+      const dayDiff = Math.abs(targetCell.dayOfWeek - candidateCell.dayOfWeek)
+      if (dayDiff > 2) {
+        warnings.push(`日期相差${dayDiff}天`)
+      }
+      if (targetCell.period !== candidateCell.period) {
+        warnings.push('节次不同')
+      }
+      // 即使没有具体原因，也添加评分警告
+      if (warnings.length > 0) {
+        violations.push(`评分较低：${warnings.join('、')}`)
+      } else {
+        violations.push(`评分较低：${score}分`)
+      }
+    }
+
+    const operations: ScheduleOperation[] = [
+      {
+        type: OperationType.Swap,
+        cellId: targetCell.id,
+        fromSlot: { dayOfWeek: targetCell.dayOfWeek, period: targetCell.period },
+        toSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period }
+      },
+      {
+        type: OperationType.Swap,
+        cellId: candidateCell.id,
+        fromSlot: { dayOfWeek: candidateCell.dayOfWeek, period: candidateCell.period },
+        toSlot: { dayOfWeek: targetCell.dayOfWeek, period: targetCell.period }
+      }
+    ]
+
+    const impact: AdjustmentImpact = {
+      affectedClasses: [targetCell.classId],
+      affectedTeachers: [targetCell.teacherId, candidateCell.teacherId],
+      affectedStudents: 0,
+      disruptionLevel: 'medium',
+      studentImpact: 'minor'
+    }
+
+    const suggestion: AdjustmentSuggestion = {
+      id: `p1_swap_${targetCell.id}_${candidateCell.id}`,
+      requestId: '',
+      priority: AdjustmentPriority.P1,
+      strategy: AdjustmentStrategy.CrossDaySwap,
+      description: `与周${candidateCell.dayOfWeek}第${candidateCell.period}节的${SUBJECT_NAMES[candidateCell.subject as Subject] || candidateCell.subject}互换`,
+      impact,
+      operations,
+      isValid,
+      violations,
+      score
+    }
+
+    suggestions.push(suggestion)
   }
 
   // 按评分排序

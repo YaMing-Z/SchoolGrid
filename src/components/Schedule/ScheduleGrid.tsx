@@ -1,4 +1,4 @@
-import { DndContext, DragStartEvent, DragEndEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { DndContext, DragStartEvent, DragEndEvent, DragMoveEvent, DragOverlay, PointerSensor, useSensor, useSensors, CollisionDetection } from '@dnd-kit/core'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { ScheduleCell } from '@/types/schedule.types'
 import { SUBJECT_NAMES, SUBJECT_COLORS } from '@/data/constants'
@@ -6,10 +6,51 @@ import { DraggableCourse } from './DraggableCourse'
 import { DropTargetCell } from './DropTargetCell'
 import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentProposalPanel'
 import { ConflictTooltip } from './ConflictUI'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8]
+
+/**
+ * 自定义碰撞检测：基于指针位置的精确检测
+ * 只返回指针下方的 droppable，不自动吸附
+ */
+const customCollisionDetection: CollisionDetection = ({
+  pointerCoordinates,
+  droppableContainers
+}) => {
+  if (!pointerCoordinates) {
+    return []
+  }
+
+  const { x, y } = pointerCoordinates
+
+  // 找到指针下方的所有 droppable
+  const collisions: { id: string; data: any }[] = []
+
+  for (const container of droppableContainers) {
+    const rect = container.rect.current
+
+    if (!rect) {
+      continue
+    }
+
+    // 检查指针是否在 droppable 的边界框内
+    if (
+      x >= rect.left &&
+      x <= rect.right &&
+      y >= rect.top &&
+      y <= rect.bottom
+    ) {
+      collisions.push({
+        id: String(container.id),
+        data: container
+      })
+    }
+  }
+
+  return collisions
+}
 
 export function ScheduleGrid() {
   const {
@@ -29,10 +70,23 @@ export function ScheduleGrid() {
     draggedCell,
     currentProposal,
     tooltipState,
-    hideTooltip
+    hideTooltip,
+    setHoveredTarget,
+    curriculumItems,
+    rawImportData
   } = useScheduleStore()
 
   const [activeCell, setActiveCell] = useState<ScheduleCell | null>(null)
+
+  // 默认选中第一个班级
+  useEffect(() => {
+    if (!selectedClassId && classes.length > 0) {
+      setSelectedClass(classes[0].id)
+    }
+  }, [selectedClassId, classes, setSelectedClass])
+
+  // 检查是否有数据但未排课
+  const hasImportedData = rawImportData !== null || (classes.length > 0 && teachers.length > 0 && curriculumItems.length > 0)
 
   const classSchedule = schedule?.classSchedules.find(s => s.classId === selectedClassId)
 
@@ -69,12 +123,30 @@ export function ScheduleGrid() {
     }
   }
 
+  // 拖拽移动 - 实时更新悬停状态
+  const handleDragMove = (event: DragMoveEvent) => {
+    const { over } = event
+
+    if (over) {
+      const targetData = over.data.current
+      if (targetData?.dayOfWeek !== undefined && targetData?.period !== undefined) {
+        const targetKey = `${targetData.dayOfWeek}_${targetData.period}`
+        setHoveredTarget(targetKey)
+      }
+    } else {
+      setHoveredTarget(null)
+    }
+  }
+
   // 拖拽结束
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event
-    
+
     setActiveCell(null)
-    
+
+    // 关闭 Tooltip
+    hideTooltip()
+
     if (over) {
       const targetData = over.data.current
       if (targetData?.dayOfWeek && targetData?.period) {
@@ -82,17 +154,40 @@ export function ScheduleGrid() {
         applyDragAdjustment(targetKey)
       }
     }
-    
+
     endDrag()
   }
 
   // 拖拽取消
   const handleDragCancel = () => {
     setActiveCell(null)
+    hideTooltip()
     endDrag()
   }
 
+  // 空状态处理
   if (!schedule) {
+    // 已导入数据但未排课
+    if (hasImportedData) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] text-[var(--color-text-muted)]">
+          <span className="text-6xl mb-4">📊</span>
+          <p className="text-lg mb-2 text-[var(--color-text-primary)]">数据已就绪</p>
+          <p className="text-sm mb-6">
+            已导入 {classes.length} 个班级、{teachers.length} 位教师、{curriculumItems.length} 条教学计划
+          </p>
+          <button
+            onClick={() => generateSchedule()}
+            className="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-[var(--color-primary-dark)] transition-colors flex items-center gap-2"
+          >
+            <span>🚀</span>
+            <span>开始排课</span>
+          </button>
+        </div>
+      )
+    }
+
+    // 没有导入数据
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-[var(--color-text-muted)]">
         <span className="text-6xl mb-4">📅</span>
@@ -111,8 +206,9 @@ export function ScheduleGrid() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCenter}
+      collisionDetection={customCollisionDetection}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >

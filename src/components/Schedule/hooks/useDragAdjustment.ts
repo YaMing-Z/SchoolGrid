@@ -86,7 +86,20 @@ export function useDragAdjustment() {
   // 获取特定位置的放置信息
   const getDropTargetInfo = (dayOfWeek: number, period: number): DropTargetInfo | null => {
     const key = `${dayOfWeek}_${period}`
-    return dropTargets.get(key) || null
+    const result = dropTargets.get(key) || null
+    if (isDragging) {
+      console.log('[getDropTargetInfo]', {
+        key,
+        hasResult: !!result,
+        isValid: result?.isValid,
+        priority: result?.priority,
+        score: result?.score,
+        violationsCount: result?.violations?.length || 0,
+        violations: result?.violations?.map(v => ({ type: v.type, severity: v.severity, message: v.message, suggestion: v.suggestion })),
+        violationsRaw: result?.violations
+      })
+    }
+    return result
   }
 
   // 检查位置是否是有效的放置目标

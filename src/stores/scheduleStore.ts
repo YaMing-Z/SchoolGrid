@@ -14,13 +14,25 @@ import { useRuleStore } from '@/stores/ruleStore'
  * 将旧版错误码数组转换为结构化冲突详情
  */
 function convertViolationsToConflictDetails(violations: string[]): ConflictDetail[] {
-  return violations.map(code => {
-    const conflictType = VIOLATION_CODE_TO_CONFLICT_TYPE[code] || AdjustmentConflictType.SameCell
+  return violations.map(message => {
+    // 检查是否是动态警告信息（以"评分较低"开头）
+    if (message.startsWith('评分较低')) {
+      return {
+        type: AdjustmentConflictType.SameDayOnly,
+        severity: 'warning' as const,
+        message: '评分较低',
+        details: { reason: 'low_score' },
+        suggestion: message
+      }
+    }
+
+    // 检查是否是其他硬约束冲突
+    const conflictType = VIOLATION_CODE_TO_CONFLICT_TYPE[message] || AdjustmentConflictType.SameCell
     return {
       type: conflictType,
       severity: 'error' as const,
-      message: REASON_LABELS[code] || code,
-      details: { reason: code }
+      message: REASON_LABELS[message] || message,
+      details: { reason: message }
     }
   })
 }
@@ -364,7 +376,20 @@ export const useScheduleStore = create<ScheduleState>()(
         }
 
         const suggestions = engine.generateSuggestions(request)
-        
+
+        console.log('[startDrag] Generated suggestions:', {
+          targetCellId: cell.id,
+          suggestionsCount: suggestions.length,
+          suggestions: suggestions.map(s => ({
+            id: s.id,
+            priority: s.priority,
+            isValid: s.isValid,
+            violations: s.violations,
+            score: s.score,
+            operations: s.operations
+          }))
+        })
+
         // 构建dropTargets Map
         // 只使用第一个操作的toSlot作为拖拽目标（即被拖拽课程的新位置）
         const dropTargets = new Map<string, DropTargetInfo>()
@@ -494,14 +519,33 @@ export const useScheduleStore = create<ScheduleState>()(
         for (const suggestion of suggestions) {
           // 找到涉及被拖拽单元格的操作（cellId匹配被拖拽单元格）
           const targetOp = suggestion.operations.find(op => op.cellId === cell.id)
-          
+
           if (targetOp && targetOp.toSlot) {
             const targetKey = `${targetOp.toSlot.dayOfWeek}_${targetOp.toSlot.period}`
-            
+
+            console.log('[startDrag] Processing suggestion:', {
+              suggestionId: suggestion.id,
+              targetKey,
+              isValid: suggestion.isValid,
+              violations: suggestion.violations
+            })
+
             // 检查是否已有更高优先级的建议
             const existing = dropTargets.get(targetKey)
-            
+
             if (!existing || existing.priority === null || suggestion.priority < existing.priority) {
+              const convertedViolations = convertViolationsToConflictDetails(suggestion.violations)
+              console.log('[startDrag] Setting dropTarget:', {
+                targetKey,
+                suggestionId: suggestion.id,
+                isValid: suggestion.isValid,
+                score: suggestion.score,
+                priority: suggestion.priority,
+                originalViolations: suggestion.violations,
+                convertedViolationsCount: convertedViolations.length,
+                convertedViolations: convertedViolations.map(v => ({ type: v.type, severity: v.severity, message: v.message }))
+              })
+
               dropTargets.set(targetKey, {
                 cellId: targetKey,
                 dayOfWeek: targetOp.toSlot.dayOfWeek as number,
@@ -509,12 +553,21 @@ export const useScheduleStore = create<ScheduleState>()(
                 priority: suggestion.priority,
                 score: suggestion.score,
                 isValid: suggestion.isValid,
-                violations: convertViolationsToConflictDetails(suggestion.violations),
+                violations: convertedViolations,
                 operations: suggestion.operations,
                 impact: suggestion.impact,
                 description: suggestion.description
               })
             }
+          }
+        }
+
+        console.log('[startDrag] Final dropTargets count:', dropTargets.size)
+
+        // 验证一些关键条目
+        for (const [key, value] of dropTargets.entries()) {
+          if (value.isValid) {
+            console.log('[startDrag] Valid dropTarget:', { key, isValid: value.isValid, priority: value.priority, score: value.score })
           }
         }
 
@@ -524,6 +577,18 @@ export const useScheduleStore = create<ScheduleState>()(
           draggedCell: cell,
           dropTargets: new Map(dropTargets)
         })
+
+        // 验证状态已正确设置
+        setTimeout(() => {
+          const currentState = get()
+          console.log('[startDrag] State verification:', {
+            isDragging: currentState.isDragging,
+            dropTargetsType: Object.prototype.toString.call(currentState.dropTargets),
+            dropTargetsSize: currentState.dropTargets.size,
+            dropTargetsIsMap: currentState.dropTargets instanceof Map,
+            sampleEntry: Array.from(currentState.dropTargets.entries()).find(([_, v]) => v.isValid)
+          })
+        }, 0)
       },
 
       endDrag: () => set({
