@@ -777,12 +777,38 @@ function ScheduleConfigPanel() {
 
         {/* 节次时间表格 */}
         <div className="bg-white p-6 border border-[var(--color-border)] rounded-2xl shadow-sm">
-          <label className="block text-base font-bold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
-            <span>⏰</span> 节次时间设置
-          </label>
-          <p className="text-xs text-[var(--color-text-muted)] mb-4">
-            设置每节课的开始和结束时间，以及是否属于上午时段
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <label className="block text-base font-bold text-[var(--color-text-primary)] flex items-center gap-2">
+                <span>⏰</span> 节次时间设置
+              </label>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                设置每节课的开始和结束时间
+              </p>
+            </div>
+
+            {/* 快速设置上午/下午分界 */}
+            <div className="flex items-center gap-3 px-4 py-2 bg-[var(--color-bg-secondary)] rounded-xl">
+              <span className="text-sm text-[var(--color-text-secondary)]">上午/下午分界：</span>
+              <span className="text-sm font-medium text-[var(--color-primary)]">第 1 -
+                <select
+                  value={periods.filter(p => p.isMorning).length}
+                  onChange={(e) => {
+                    const morningCount = parseInt(e.target.value)
+                    periods.forEach((period) => {
+                      handlePeriodChange(period.period, 'isMorning', period.period <= morningCount)
+                    })
+                  }}
+                  className="mx-1 px-2 py-1 bg-white border border-[var(--color-border)] rounded-lg text-sm font-semibold text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] cursor-pointer"
+                >
+                  {periods.map((_, index) => (
+                    <option key={index + 1} value={index + 1}>{index + 1}</option>
+                  ))}
+                </select>
+                节为上午
+              </span>
+            </div>
+          </div>
 
           <div className="overflow-x-auto rounded-xl border border-[var(--color-border)]">
             <table className="w-full text-left border-collapse">
@@ -791,52 +817,69 @@ function ScheduleConfigPanel() {
                   <th className="p-4 font-medium border-b border-[var(--color-border)] w-24">节次</th>
                   <th className="p-4 font-medium border-b border-[var(--color-border)]">开始时间</th>
                   <th className="p-4 font-medium border-b border-[var(--color-border)]">结束时间</th>
-                  <th className="p-4 font-medium border-b border-[var(--color-border)] w-32 text-center">上午/下午</th>
+                  <th className="p-4 font-medium border-b border-[var(--color-border)] w-32 text-center">时段</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {periods.map((period) => (
-                  <tr key={period.period} className="hover:bg-[var(--color-bg-secondary)]/50 transition duration-150">
-                    <td className="p-4 font-medium">
-                      <div className="flex flex-col">
-                        <span>第{period.period}节</span>
-                        <span className="text-xs text-[var(--color-text-muted)]">
-                          {period.isMorning ? '上午' : '下午'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <input
-                        type="time"
-                        value={period.startTime}
-                        onChange={(e) => handlePeriodChange(period.period, 'startTime', e.target.value)}
-                        className="w-32 px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm"
-                      />
-                    </td>
-                    <td className="p-4">
-                      <input
-                        type="time"
-                        value={period.endTime}
-                        onChange={(e) => handlePeriodChange(period.period, 'endTime', e.target.value)}
-                        className="w-32 px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm"
-                      />
-                    </td>
-                    <td className="p-4 text-center">
-                      <label className="relative inline-flex items-center cursor-pointer">
+                {periods.map((period, index) => {
+                  const isLastMorning = period.isMorning && (index === periods.length - 1 || !periods[index + 1].isMorning)
+                  return (
+                    <tr
+                      key={period.period}
+                      className={`hover:bg-[var(--color-bg-secondary)]/50 transition duration-150 ${isLastMorning ? 'border-b-2 border-b-[var(--color-primary)]' : ''}`}
+                    >
+                      <td className="p-4 font-medium">
+                        <div className="flex flex-col">
+                          <span>第{period.period}节</span>
+                          <span className={`text-xs ${period.isMorning ? 'text-amber-600' : 'text-blue-600'}`}>
+                            {period.isMorning ? '🌅 上午' : '🌤️ 下午'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-4">
                         <input
-                          type="checkbox"
-                          checked={period.isMorning}
-                          onChange={(e) => handlePeriodChange(period.period, 'isMorning', e.target.checked)}
-                          className="sr-only peer"
+                          type="time"
+                          value={period.startTime}
+                          onChange={(e) => handlePeriodChange(period.period, 'startTime', e.target.value)}
+                          className={`w-32 px-3 py-2 border rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm ${
+                            period.isMorning
+                              ? 'bg-amber-50/50 border-amber-200 focus:ring-amber-300'
+                              : 'bg-blue-50/50 border-blue-200 focus:ring-blue-300'
+                          }`}
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--color-primary)]"></div>
-                        <span className="ml-2 text-xs text-[var(--color-text-muted)]">
-                          {period.isMorning ? '上午' : '下午'}
-                        </span>
-                      </label>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-4">
+                        <input
+                          type="time"
+                          value={period.endTime}
+                          onChange={(e) => handlePeriodChange(period.period, 'endTime', e.target.value)}
+                          className={`w-32 px-3 py-2 border rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200 text-sm text-[var(--color-text-primary)] shadow-sm ${
+                            period.isMorning
+                              ? 'bg-amber-50/50 border-amber-200 focus:ring-amber-300'
+                              : 'bg-blue-50/50 border-blue-200 focus:ring-blue-300'
+                          }`}
+                        />
+                      </td>
+                      <td className="p-4 text-center">
+                        <button
+                          onClick={() => {
+                            const morningCount = period.isMorning ? period.period - 1 : period.period
+                            periods.forEach((p) => {
+                              handlePeriodChange(p.period, 'isMorning', p.period <= morningCount)
+                            })
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${
+                            period.isMorning
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-300'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200 border border-blue-300'
+                          }`}
+                        >
+                          {period.isMorning ? '设为分界线' : '设为分界线'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
