@@ -3,9 +3,10 @@ import { Teacher } from '@/types/teacher.types'
 import { SchoolClass } from '@/types/class.types'
 import { CurriculumItem } from '@/types/curriculum.types'
 import { ScheduleCell, SchoolSchedule, ClassSchedule } from '@/types/schedule.types'
-import { SUBJECT_NAMES, DEFAULT_PERIODS } from '@/data/constants'
+import { SUBJECT_NAMES, Subject } from '@/data/constants'
 import { parseMatrixExcel } from '@/parsers/matrixParser'
 import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
+import { useRuleStore } from '@/stores/ruleStore'
 
 /**
  * Excel 导入导出服务
@@ -97,8 +98,10 @@ function createClassScheduleSheet(classSchedule: ClassSchedule): XLSX.WorkSheet 
   const headers = ['节次', '周一', '周二', '周三', '周四', '周五']
   const rows: (string | number)[][] = [headers]
 
-  // 按节次组织数据
-  const maxPeriod = Math.max(...classSchedule.cells.map(c => c.period), DEFAULT_PERIODS.length)
+  // 获取动态节次配置
+  const scheduleConfig = useRuleStore.getState().scheduleConfig
+  const periods = scheduleConfig.periods.map(p => p.period)
+  const maxPeriod = Math.max(...classSchedule.cells.map(c => c.period), ...periods)
 
   for (let period = 1; period <= maxPeriod; period++) {
     const row: (string | number)[] = [period]
@@ -210,7 +213,10 @@ function createTeacherScheduleSheet(teacher: Teacher, cells: ScheduleCell[]): XL
   const headers = ['节次', '周一', '周二', '周三', '周四', '周五']
   const rows: (string | number)[][] = [headers]
 
-  const maxPeriod = Math.max(...cells.map(c => c.period), DEFAULT_PERIODS.length)
+  // 获取动态节次配置
+  const scheduleConfig = useRuleStore.getState().scheduleConfig
+  const periods = scheduleConfig.periods.map(p => p.period)
+  const maxPeriod = Math.max(...cells.map(c => c.period), ...periods)
 
   for (let period = 1; period <= maxPeriod; period++) {
     const row: (string | number)[] = [period]
@@ -312,4 +318,288 @@ export function downloadExcel(buffer: ArrayBuffer, filename: string): void {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+/**
+ * 导出级部总课程表
+ * 横向显示时间段，纵向显示班级
+ */
+export function exportGradeOverviewToExcel(
+  schedule: SchoolSchedule,
+  classes: SchoolClass[]
+): ArrayBuffer {
+  const workbook = XLSX.utils.book_new()
+  const rows: (string | number)[][] = []
+
+  // 获取节次配置
+  const scheduleConfig = useRuleStore.getState().scheduleConfig
+  const periods = scheduleConfig.periods.map(p => p.period)
+  const days = ['周一', '周二', '周三', '周四', '周五']
+
+  // 标题行
+  rows.push(['级部总课程表'])
+  rows.push([])
+  rows.push(['生成时间：', new Date().toLocaleString('zh-CN')])
+  rows.push([])
+
+  // 表头：班级 | 周一1 | 周一2 | ... | 周五7
+  const headerRow: (string | number)[] = ['班级']
+  for (const day of days) {
+    for (const period of periods) {
+      headerRow.push(`${day}第${period}节`)
+    }
+  }
+  rows.push(headerRow)
+
+  // 构建数据结构
+  const scheduleMap = new Map<string, Map<string, Subject>>()
+  for (const classSchedule of schedule.classSchedules) {
+    const cellMap = new Map<string, Subject>()
+    for (const cell of classSchedule.cells) {
+      cellMap.set(`${cell.dayOfWeek}_${cell.period}`, cell.subject)
+    }
+    scheduleMap.set(classSchedule.classId, cellMap)
+  }
+
+  // 数据行
+  for (const cls of classes) {
+    const classRow: (string | number)[] = [cls.name]
+    const cellMap = scheduleMap.get(cls.id)
+
+    for (let dayIndex = 0; dayIndex < 5; dayIndex++) {
+      for (const period of periods) {
+        const cellKey = `${dayIndex + 1}_${period}`
+        const subject = cellMap?.get(cellKey)
+        classRow.push(subject ? (SUBJECT_NAMES[subject] || subject) : '')
+      }
+    }
+
+    rows.push(classRow)
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows)
+
+  // 设置列宽
+  const cols = [{ wch: 12 }] // 班级列
+  for (let i = 0; i < 5 * periods.length; i++) {
+    cols.push({ wch: 8 })
+  }
+  worksheet['!cols'] = cols
+
+  // 设置打印选项
+  worksheet['!pageSetup'] = {
+    orientation: 'landscape',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, '级部总表')
+
+  const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+  return buffer
+}
+
+/**
+ * 导出所有班级课表（单个Sheet，每个班级一个表格）
+ */
+export function exportAllClassSchedules(
+  schedule: SchoolSchedule,
+  classes: SchoolClass[],
+  teachers: Teacher[]
+): ArrayBuffer {
+  const workbook = XLSX.utils.book_new()
+  const rows: (string | number)[][] = []
+
+  // 获取节次配置
+  const scheduleConfig = useRuleStore.getState().scheduleConfig
+  const periods = scheduleConfig.periods.map(p => p.period)
+  const days = ['周一', '周二', '周三', '周四', '周五']
+
+  // 教师ID到姓名的映射
+  const teacherNameMap = new Map<string, string>()
+  for (const teacher of teachers) {
+    teacherNameMap.set(teacher.id, teacher.name)
+    teacherNameMap.set(teacher.employeeId, teacher.name)
+  }
+
+  // 标题
+  rows.push(['班级课表汇总'])
+  rows.push(['生成时间：', new Date().toLocaleString('zh-CN')])
+  rows.push([])
+
+  // 为每个班级生成课表
+  for (const cls of classes) {
+    const classSchedule = schedule.classSchedules.find(s => s.classId === cls.id)
+    if (!classSchedule) continue
+
+    // 班级标题
+    rows.push([])
+    rows.push([`${cls.name} 课表`])
+    rows.push([])
+
+    // 表头
+    rows.push(['节次', ...days])
+
+    // 构建单元格映射
+    const cellMap = new Map<string, ScheduleCell>()
+    for (const cell of classSchedule.cells) {
+      cellMap.set(`${cell.dayOfWeek}_${cell.period}`, cell)
+    }
+
+    // 数据行
+    for (const period of periods) {
+      const row: (string | number)[] = [`第${period}节`]
+      for (let day = 1; day <= 5; day++) {
+        const cell = cellMap.get(`${day}_${period}`)
+        if (cell) {
+          const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+          const teacherName = teacherNameMap.get(cell.teacherId) || cell.teacherId
+          row.push(`${subjectName}\n(${teacherName})`)
+        } else {
+          row.push('')
+        }
+      }
+      rows.push(row)
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows)
+
+  // 设置列宽
+  worksheet['!cols'] = [
+    { wch: 8 },  // 节次
+    { wch: 14 }, // 周一
+    { wch: 14 }, // 周二
+    { wch: 14 }, // 周三
+    { wch: 14 }, // 周四
+    { wch: 14 }  // 周五
+  ]
+
+  // 设置打印选项
+  worksheet['!pageSetup'] = {
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, '班级课表')
+
+  const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+  return buffer
+}
+
+/**
+ * 导出所有教师课表（单个Sheet，每个教师一个表格）
+ */
+export function exportAllTeacherSchedules(
+  schedule: SchoolSchedule,
+  teachers: Teacher[],
+  classes: SchoolClass[]
+): ArrayBuffer {
+  const workbook = XLSX.utils.book_new()
+  const rows: (string | number)[][] = []
+
+  // 获取节次配置
+  const scheduleConfig = useRuleStore.getState().scheduleConfig
+  const periods = scheduleConfig.periods.map(p => p.period)
+  const days = ['周一', '周二', '周三', '周四', '周五']
+
+  // 班级ID到名称的映射
+  const classNameMap = new Map<string, string>()
+  for (const cls of classes) {
+    classNameMap.set(cls.id, cls.name)
+  }
+
+  // 按学科分组教师
+  const teachersBySubject = new Map<string, Teacher[]>()
+  for (const teacher of teachers) {
+    const subject = teacher.subject
+    if (!teachersBySubject.has(subject)) {
+      teachersBySubject.set(subject, [])
+    }
+    teachersBySubject.get(subject)!.push(teacher)
+  }
+
+  // 标题
+  rows.push(['教师课表汇总'])
+  rows.push(['生成时间：', new Date().toLocaleString('zh-CN')])
+  rows.push([])
+
+  // 构建教师课表映射
+  const teacherScheduleMap = new Map<string, Map<string, ScheduleCell>>()
+  for (const classSchedule of schedule.classSchedules) {
+    for (const cell of classSchedule.cells) {
+      if (!teacherScheduleMap.has(cell.teacherId)) {
+        teacherScheduleMap.set(cell.teacherId, new Map())
+      }
+      teacherScheduleMap.get(cell.teacherId)!.set(`${cell.dayOfWeek}_${cell.period}`, cell)
+    }
+  }
+
+  // 按学科遍历教师
+  const sortedSubjects = Array.from(teachersBySubject.keys()).sort()
+  for (const subject of sortedSubjects) {
+    const subjectTeachers = teachersBySubject.get(subject)!
+    const subjectName = SUBJECT_NAMES[subject as Subject] || subject
+
+    // 学科分组标题
+    rows.push([])
+    rows.push([`【${subjectName}】`])
+
+    for (const teacher of subjectTeachers) {
+      const cellMap = teacherScheduleMap.get(teacher.id)
+      const weeklyHours = cellMap?.size || 0
+
+      // 教师标题
+      rows.push([])
+      rows.push([`${teacher.name} 课表  （周课时：${weeklyHours}节）`])
+      rows.push([])
+
+      // 表头
+      rows.push(['节次', ...days])
+
+      // 数据行
+      for (const period of periods) {
+        const row: (string | number)[] = [`第${period}节`]
+        for (let day = 1; day <= 5; day++) {
+          const cell = cellMap?.get(`${day}_${period}`)
+          if (cell) {
+            const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+            const className = classNameMap.get(cell.classId) || cell.classId
+            row.push(`${subjectName}\n(${className})`)
+          } else {
+            row.push('')
+          }
+        }
+        rows.push(row)
+      }
+    }
+  }
+
+  const worksheet = XLSX.utils.aoa_to_sheet(rows)
+
+  // 设置列宽
+  worksheet['!cols'] = [
+    { wch: 8 },  // 节次
+    { wch: 16 }, // 周一
+    { wch: 16 }, // 周二
+    { wch: 16 }, // 周三
+    { wch: 16 }, // 周四
+    { wch: 16 }  // 周五
+  ]
+
+  // 设置打印选项
+  worksheet['!pageSetup'] = {
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0
+  }
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, '教师课表')
+
+  const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' })
+  return buffer
 }

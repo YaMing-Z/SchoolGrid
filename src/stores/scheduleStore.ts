@@ -63,6 +63,7 @@ function findCellAtSlot(
 
 export type ViewMode = 'dashboard' | 'schedule' | 'import' | 'rules'
 export type ScheduleViewType = 'class' | 'teacher'
+export type OverviewTab = 'grade' | 'class' | 'teacher'
 
 // 调课模式类型
 export type AdjustmentModeType = 'edit' | 'suggest'
@@ -117,6 +118,7 @@ interface ScheduleState {
   selectedTeacherId: string | null
   selectedCell: ScheduleCell | null
   scheduleViewType: ScheduleViewType
+  overviewTab: OverviewTab
 
   // 调课状态（旧版，保留兼容）
   adjustmentMode: boolean
@@ -147,6 +149,7 @@ interface ScheduleState {
   setSelectedTeacher: (teacherId: string | null) => void
   setSelectedCell: (cell: ScheduleCell | null) => void
   setScheduleViewType: (type: ScheduleViewType) => void
+  setOverviewTab: (tab: OverviewTab) => void
   setValidationErrors: (errors: string[]) => void
   setValidationWarnings: (warnings: string[]) => void
   setRawImportData: (data: AggregationInput | null) => void
@@ -206,6 +209,7 @@ const initialState = {
   selectedTeacherId: null,
   selectedCell: null,
   scheduleViewType: 'class' as ScheduleViewType,
+  overviewTab: 'grade' as OverviewTab,
   adjustmentMode: false,
   adjustmentSuggestions: [],
   selectedSuggestion: null,
@@ -236,6 +240,7 @@ export const useScheduleStore = create<ScheduleState>()(
       setSelectedTeacher: (teacherId) => set({ selectedTeacherId: teacherId }),
       setSelectedCell: (cell) => set({ selectedCell: cell }),
       setScheduleViewType: (type) => set({ scheduleViewType: type }),
+      setOverviewTab: (tab) => set({ overviewTab: tab }),
       setValidationErrors: (errors) => set({ validationErrors: errors }),
       setValidationWarnings: (warnings) => set({ validationWarnings: warnings }),
       setRawImportData: (data) => set({ rawImportData: data }),
