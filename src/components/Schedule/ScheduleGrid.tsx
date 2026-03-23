@@ -210,7 +210,7 @@ export function ScheduleGrid() {
             <span className="text-6xl mb-4">📊</span>
             <p className="text-lg mb-2 text-[var(--color-text-primary)]">数据已就绪</p>
             <p className="text-sm mb-6">
-              已导入 {classes.length} 个班级、{teachers.length} 位教师、{curriculumItems.length} 条教学计划
+              已导入 {classes.length} 个班级、{teachers.length} 位教师
             </p>
             <button
               onClick={() => setShowConfirmModal(true)}

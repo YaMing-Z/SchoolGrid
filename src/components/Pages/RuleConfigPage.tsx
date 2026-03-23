@@ -170,8 +170,20 @@ function SubjectRuleConfig() {
       </div>
 
       <div className="p-6 flex-1 overflow-auto">
+        {/* 重要提示 */}
+        <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl flex items-start gap-3">
+          <span className="text-2xl">⚠️</span>
+          <div>
+            <h4 className="font-semibold text-amber-800 mb-1">请严格设定各学科的周课时</h4>
+            <p className="text-sm text-amber-700">
+              周课时数直接决定排课结果。未配置规则的学科默认为 <strong>1 节/周</strong>，可能导致排课数量不足。
+              请根据实际教学需求，为每个学科设置正确的周课时。
+            </p>
+          </div>
+        </div>
+
         <div className="flex justify-end mb-4">
-          <button 
+          <button
             onClick={handleAddRule}
             className="px-4 py-2 bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-light)] text-white rounded-xl shadow-lg shadow-[var(--color-primary)]/20 hover:scale-105 transition-all duration-200 font-medium text-sm flex items-center gap-1"
           >

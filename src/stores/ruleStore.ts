@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { SubjectRule, GlobalTimeRule, TeacherLoadRule, TeacherTimeRule, SubjectTimeRule, ScheduleConfig, PeriodConfig } from '@/types/rule.types'
+import { Subject } from '@/data/constants'
 
 // 默认课表配置
 export const DEFAULT_SCHEDULE_CONFIG: ScheduleConfig = {
@@ -66,8 +67,33 @@ interface RuleState {
   resetScheduleConfig: () => void
 }
 
+// 默认学科规则（语文、数学、英语，周课时为6）
+const DEFAULT_SUBJECT_RULES: SubjectRule[] = [
+  {
+    id: 'rule_chinese',
+    subject: Subject.Chinese,
+    weeklyHours: 6,
+    isConsecutive: false,
+    consecutiveCount: 2
+  },
+  {
+    id: 'rule_math',
+    subject: Subject.Math,
+    weeklyHours: 6,
+    isConsecutive: false,
+    consecutiveCount: 2
+  },
+  {
+    id: 'rule_english',
+    subject: Subject.English,
+    weeklyHours: 6,
+    isConsecutive: false,
+    consecutiveCount: 2
+  }
+]
+
 const initialState = {
-  subjectRules: [],
+  subjectRules: DEFAULT_SUBJECT_RULES,
   subjectTimeRules: [],
   globalTimeRules: [],
   teacherLoadRule: {

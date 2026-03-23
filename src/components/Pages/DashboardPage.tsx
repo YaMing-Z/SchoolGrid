@@ -6,7 +6,6 @@ import { GenerateScheduleConfirmModal } from '@/components/Dashboard/GenerateSch
 const statCards = [
   { key: 'teachers', label: '教师总数', icon: '👨‍🏫', color: 'from-blue-500 to-blue-600' },
   { key: 'classes', label: '班级总数', icon: '🏫', color: 'from-emerald-500 to-emerald-600' },
-  { key: 'curriculum', label: '课程条目', icon: '📚', color: 'from-purple-500 to-purple-600' },
   { key: 'scheduled', label: '已排课时', icon: '✅', color: 'from-amber-500 to-amber-600' },
 ]
 
@@ -25,7 +24,6 @@ export function DashboardPage() {
   const stats = {
     teachers: teachers.length,
     classes: classes.length,
-    curriculum: curriculumItems.length,
     scheduled: schedule?.classSchedules.reduce((sum, cs) => sum + cs.cells.length, 0) || 0,
   }
 
