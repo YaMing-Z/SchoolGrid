@@ -270,27 +270,30 @@ export function ScheduleGrid() {
           </div>
           <div className="flex items-center gap-3">
             {/* 模式切换 */}
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setAdjustmentModeType('edit')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  adjustmentModeType === 'edit'
-                    ? 'bg-white text-[var(--color-primary)] shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                ✏️ 编辑模式
-              </button>
-              <button
-                onClick={() => setAdjustmentModeType('suggest')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  adjustmentModeType === 'suggest'
-                    ? 'bg-white text-[var(--color-primary)] shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                💡 建议模式
-              </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">调课方式</span>
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setAdjustmentModeType('edit')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    adjustmentModeType === 'edit'
+                      ? 'bg-white text-[var(--color-primary)] shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  ✏️ 编辑模式
+                </button>
+                <button
+                  onClick={() => setAdjustmentModeType('suggest')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    adjustmentModeType === 'suggest'
+                      ? 'bg-white text-[var(--color-primary)] shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  💡 建议模式
+                </button>
+              </div>
             </div>
             
             <div className="w-px h-6 bg-gray-200"></div>
@@ -375,66 +378,83 @@ export function ScheduleGrid() {
               </div>
 
               {/* Period rows */}
-              {periods.map((period) => (
-                <div key={period} className="grid grid-cols-6 border-b border-[var(--color-border-light)] last:border-b-0">
-                  {/* Period label */}
-                  <div className="p-3 bg-[var(--color-bg-secondary)] flex flex-col justify-center">
-                    <span className="font-medium text-[var(--color-text-primary)]">第{period}节</span>
-                    <span className="text-xs text-[var(--color-text-muted)]">
-                      {isMorningPeriod(period) ? '上午' : '下午'}
-                    </span>
+              {periods.map((period, index) => {
+                // 判断是否需要在上一行之后添加分割线（上午最后一节和下午第一节之间）
+                const prevPeriod = index > 0 ? periods[index - 1] : null
+                const showDivider = prevPeriod !== null && isMorningPeriod(prevPeriod) && !isMorningPeriod(period)
+
+                return (
+                  <div key={period}>
+                    {/* 上午/下午分割线 */}
+                    {showDivider && (
+                      <div className="grid grid-cols-6">
+                        <div className="bg-[var(--color-bg-secondary)] border-t-2 border-[var(--color-primary-light)]"></div>
+                        {DAYS.map((day) => (
+                          <div key={day} className="border-t-2 border-[var(--color-primary-light)]"></div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-6 border-b border-[var(--color-border-light)] last:border-b-0">
+                      {/* Period label */}
+                      <div className="p-3 bg-[var(--color-bg-secondary)] flex flex-col justify-center">
+                        <span className="font-medium text-[var(--color-text-primary)]">第{period}节</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          {isMorningPeriod(period) ? '上午' : '下午'}
+                        </span>
+                      </div>
+
+                      {/* Day cells */}
+                      {DAYS.map((_, dayIndex) => {
+                        const dayOfWeek = dayIndex + 1
+                        const cellKey = `${dayOfWeek}_${period}`
+                        const cell = cellMap.get(cellKey)
+
+                        return (
+                          <DropTargetCell
+                            key={cellKey}
+                            dayOfWeek={dayOfWeek}
+                            period={period}
+                          >
+                            {cell ? (
+                              <DraggableCourse
+                                cell={cell}
+                                getTeacherName={getTeacherName}
+                                onClick={() => handleSelfStudyClick(cell)}
+                              />
+                            ) : (
+                              !isDragging && (
+                                <div className="h-full flex items-center justify-center text-[var(--color-text-muted)]">
+                                  <span className="text-lg">-</span>
+                                </div>
+                              )
+                            )}
+                          </DropTargetCell>
+                        )
+                      })}
+                    </div>
                   </div>
-
-                  {/* Day cells */}
-                  {DAYS.map((_, dayIndex) => {
-                    const dayOfWeek = dayIndex + 1
-                    const cellKey = `${dayOfWeek}_${period}`
-                    const cell = cellMap.get(cellKey)
-
-                    return (
-                      <DropTargetCell
-                        key={cellKey}
-                        dayOfWeek={dayOfWeek}
-                        period={period}
-                      >
-                        {cell ? (
-                          <DraggableCourse
-                            cell={cell}
-                            getTeacherName={getTeacherName}
-                            onClick={() => handleSelfStudyClick(cell)}
-                          />
-                        ) : (
-                          !isDragging && (
-                            <div className="h-full flex items-center justify-center text-[var(--color-text-muted)]">
-                              <span className="text-lg">-</span>
-                            </div>
-                          )
-                        )}
-                      </DropTargetCell>
-                    )
-                  })}
-                </div>
-              ))}
+                )
+              })}
             </div>
 
-            {/* Legend */}
-            <div className="mt-4 flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
-              <span>图例：</span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-green-500"></span>
-                P0 同日互换
+            {/* 操作说明 */}
+            <div className="mt-4 flex items-center gap-6 text-xs text-[var(--color-text-muted)]">
+              <span className="font-medium text-[var(--color-text-secondary)]">操作提示：</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded">↔</span>
+                拖拽课程进行调课
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-blue-500"></span>
-                P1 跨日互换
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded">✏️</span>
+                编辑模式：直接交换
               </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-orange-500"></span>
-                P2 代课
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded">💡</span>
+                建议模式：生成方案供选择
               </span>
-              <span className="flex items-center gap-1">
-                <span>📌</span>
-                固定课程
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded">👆</span>
+                点击自习课可安排教师
               </span>
             </div>
           </div>
@@ -445,7 +465,7 @@ export function ScheduleGrid() {
           {activeCell ? (
             <div className="p-3 bg-white rounded-lg shadow-xl border-2 border-[var(--color-primary)] opacity-90">
               <div
-                className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1"
+                className="inline-block px-2.5 py-1 rounded text-sm font-medium text-white mb-1"
                 style={{ backgroundColor: SUBJECT_COLORS[activeCell.subject] || '#6b7280' }}
               >
                 {SUBJECT_NAMES[activeCell.subject] || activeCell.subject}

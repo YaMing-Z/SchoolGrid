@@ -92,7 +92,7 @@ export function DraggableCourse({ cell, getTeacherName, onClick }: DraggableCour
     >
       <div>
         <div
-          className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1"
+          className="inline-block px-2.5 py-1 rounded text-sm font-medium text-white mb-1.5"
           style={{ backgroundColor: SUBJECT_COLORS[cell.subject] || '#6b7280' }}
         >
           {SUBJECT_NAMES[cell.subject] || cell.subject}
