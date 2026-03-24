@@ -8,7 +8,7 @@ import {
   ScheduleOperation,
   OperationType
 } from '@/types/adjustment.types'
-import { Subject } from '@/data/constants'
+import { SubjectType } from '@/data/constants'
 
 /**
  * P2策略：同科代课
@@ -24,7 +24,7 @@ import { Subject } from '@/data/constants'
 interface TeacherAvailability {
   teacherId: string
   teacherName: string
-  subject: Subject
+  subject: SubjectType
   isAvailable: boolean       // 该时段是否有空
   currentWeeklyHours: number // 当前周课时
   weeklyHoursLimit: number   // 周课时上限

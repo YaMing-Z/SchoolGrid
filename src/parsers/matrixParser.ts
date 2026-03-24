@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { Subject, SUBJECT_NAMES } from '@/data/constants'
+import { SubjectType, findSubjectByName } from '@/data/constants'
 import { GradeLevel, GRADE_NAMES } from '@/types/class.types'
 import { AggregationInput } from '@/services/ruleAggregator'
 
@@ -30,13 +30,11 @@ function parseGrade(gradeName: string): GradeLevel | null {
   return null
 }
 
-function parseSubject(subjectName: string): Subject | null {
+function parseSubject(subjectName: string): SubjectType | null {
   const normalizedName = subjectName?.trim()
   if (!normalizedName) return null
-  for (const [key, value] of Object.entries(SUBJECT_NAMES)) {
-    if (value === normalizedName) return key as Subject
-  }
-  return null
+  // 使用新的 findSubjectByName，支持自定义学科
+  return findSubjectByName(normalizedName)
 }
 
 /**
@@ -56,7 +54,7 @@ export function parseMatrixExcel(worksheet: XLSX.WorkSheet): AggregationInput {
 
   // 动态分析表头，找出所有可能的学科列
   const headers = Object.keys(jsonData[0])
-  const subjectColumns: { header: string, subject: Subject }[] = []
+  const subjectColumns: { header: string, subject: SubjectType }[] = []
   
   headers.forEach(header => {
     // 排除已知的基础字段列

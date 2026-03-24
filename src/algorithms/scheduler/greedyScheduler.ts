@@ -91,8 +91,8 @@ function canPlaceCourse(
   dayOfWeek: number,
   period: number,
   teacher: Teacher | undefined,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subject?: Subject
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subject?: string
 ): boolean {
   // 检查班级是否被占用
   if (isSlotOccupied(context.occupancy.classes, classId, dayOfWeek, period)) {
@@ -131,8 +131,8 @@ function canPlaceConsecutive(
   startPeriod: number,
   count: number,
   teacher: Teacher | undefined,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subject?: Subject,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subject?: string,
   periodsPerDay?: number
 ): boolean {
   // 检查起始节是否在合理范围内
@@ -158,7 +158,7 @@ function getSubjectCountOnDay(
   distribution: Map<string, number>,
   classId: string,
   dayOfWeek: number,
-  subject: Subject
+  subject: string
 ): number {
   const key = `${classId}_${dayOfWeek}_${subject}`
   return distribution.get(key) || 0
@@ -171,7 +171,7 @@ function incrementSubjectCount(
   distribution: Map<string, number>,
   classId: string,
   dayOfWeek: number,
-  subject: Subject
+  subject: string
 ): void {
   const key = `${classId}_${dayOfWeek}_${subject}`
   distribution.set(key, (distribution.get(key) || 0) + 1)
@@ -204,9 +204,80 @@ function calculateConstraintScore(item: CurriculumItem): number {
 
 /**
  * 排序课程条目（约束程度高的排前面）
+ * 同时确保同一学科的课程在班级间公平分配
  */
 function sortCurriculumItems(items: CurriculumItem[]): CurriculumItem[] {
-  return [...items].sort((a, b) => calculateConstraintScore(b) - calculateConstraintScore(a))
+  // 1. 按学科分组
+  const itemsBySubject = new Map<string, CurriculumItem[]>()
+  for (const item of items) {
+    const subject = item.subject
+    if (!itemsBySubject.has(subject)) {
+      itemsBySubject.set(subject, [])
+    }
+    itemsBySubject.get(subject)!.push(item)
+  }
+
+  // 2. 在每个学科内部，按约束程度排序
+  for (const [_, subjectItems] of itemsBySubject) {
+    subjectItems.sort((a, b) => calculateConstraintScore(b) - calculateConstraintScore(a))
+  }
+
+  // 3. 按学科的约束程度排序（学科中最高约束程度的课程决定学科排序）
+  const subjects = Array.from(itemsBySubject.keys()).sort((a, b) => {
+    const aMaxScore = Math.max(...itemsBySubject.get(a)!.map(item => calculateConstraintScore(item)))
+    const bMaxScore = Math.max(...itemsBySubject.get(b)!.map(item => calculateConstraintScore(item)))
+    return bMaxScore - aMaxScore
+  })
+
+  // 4. 按班级轮流排课，确保公平分配
+  // 收集所有班级ID
+  const classIds = new Set<string>()
+  for (const item of items) {
+    classIds.add(item.classId)
+  }
+  const classIdList = Array.from(classIds)
+
+  // 5. 为每个学科创建班级轮换队列
+  // 每轮每个班级排1节，确保公平分配时段
+  const result: CurriculumItem[] = []
+  const classRoundRobinIndex = new Map<string, number>() // 学科 -> 当前轮到的班级索引
+
+  // 初始化每个学科的班级轮换索引
+  for (const subject of subjects) {
+    classRoundRobinIndex.set(subject, 0)
+  }
+
+  // 6. 多轮排课：每轮每个学科的每个班级排1节
+  let hasMoreItems = true
+  while (hasMoreItems) {
+    hasMoreItems = false
+
+    for (const subject of subjects) {
+      const subjectItems = itemsBySubject.get(subject)!
+      if (subjectItems.length === 0) continue
+
+      // 找到当前应该排课的班级
+      const startIndex = classRoundRobinIndex.get(subject)!
+
+      // 尝试为每个班级排1节（如果该班级还有该学科的课程）
+      for (let i = 0; i < classIdList.length; i++) {
+        const classIndex = (startIndex + i) % classIdList.length
+        const targetClassId = classIdList[classIndex]
+
+        // 找到该班级该学科的下一个待排课程
+        const itemIndex = subjectItems.findIndex(item => item.classId === targetClassId)
+        if (itemIndex !== -1) {
+          result.push(subjectItems.splice(itemIndex, 1)[0])
+          hasMoreItems = true
+          // 更新轮换索引到下一个班级
+          classRoundRobinIndex.set(subject, (classIndex + 1) % classIdList.length)
+          break // 每轮每个学科只排1节，确保公平
+        }
+      }
+    }
+  }
+
+  return result
 }
 
 /**
@@ -323,9 +394,9 @@ function findBestConsecutiveSlot(
   consecutiveCount: number,
   teacher: Teacher | undefined,
   subjectDistribution: Map<string, number>,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subjectDailyMax?: Map<string, number>,
+  subjectTimePreference?: Map<string, string>,
   periodsPerDay?: number
 ): { dayOfWeek: number; startPeriod: number } | null {
   // 计算每天该学科的课程数
@@ -399,9 +470,9 @@ function placeConsecutiveCourse(
   remainingHours: number,
   teacher: Teacher | undefined,
   subjectDistribution: Map<string, number>,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subjectDailyMax?: Map<string, number>,
+  subjectTimePreference?: Map<string, string>,
   periodsPerDay?: number
 ): number {
   const consecutiveCount = item.consecutiveCount || 2
@@ -448,9 +519,9 @@ function findBestRegularSlot(
   context: SchedulingContext,
   teacher: Teacher | undefined,
   subjectDistribution: Map<string, number>,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subjectDailyMax?: Map<string, number>,
+  subjectTimePreference?: Map<string, string>,
   periodsPerDay?: number
 ): { dayOfWeek: number; period: number } | null {
   // 计算每天该学科的课程数
@@ -527,9 +598,9 @@ function placeRegularCourse(
   remainingHours: number,
   teacher: Teacher | undefined,
   subjectDistribution: Map<string, number>,
-  subjectForbiddenSlots?: Map<Subject, Set<string>>,
-  subjectDailyMax?: Map<Subject, number>,
-  subjectTimePreference?: Map<Subject, string>,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subjectDailyMax?: Map<string, number>,
+  subjectTimePreference?: Map<string, string>,
   periodsPerDay?: number
 ): number {
   let placed = 0
@@ -557,6 +628,152 @@ function placeRegularCourse(
   }
 
   return placed
+}
+
+/**
+ * 填充班级的空缺时段
+ * 当某些课程因为禁排规则无法排在某个时段时，尝试用交换策略填充
+ * 策略：找到空缺时段，然后找到该班级在该时段可以排的课程，
+ * 如果该课程在其他时段有课，尝试交换位置
+ */
+function fillEmptySlots(
+  classes: SchoolClass[],
+  context: SchedulingContext,
+  allCells: ScheduleCell[],
+  curriculumItems: CurriculumItem[],
+  subjectDistribution: Map<string, number>,
+  subjectForbiddenSlots?: Map<string, Set<string>>,
+  subjectDailyMax?: Map<string, number>,
+  _subjectTimePreference?: Map<string, string>,
+  periodsPerDay?: number
+): void {
+  const maxPeriods = periodsPerDay || getPeriodsPerDay()
+  const teacherMap = context.teachers
+  const teacherByEmployeeId = new Map<string, Teacher>()
+  for (const teacher of teacherMap.values()) {
+    if (teacher.employeeId) {
+      teacherByEmployeeId.set(teacher.employeeId, teacher)
+    }
+  }
+
+  // 遍历每个班级，找出空缺时段并尝试填充
+  for (const cls of classes) {
+    const classId = cls.id
+    const classCells = allCells.filter(c => c.classId === classId)
+    const classItems = curriculumItems.filter(item => item.classId === classId)
+
+    // 找出该班级的所有空缺时段（只检查1-7节，8-9节是自习课）
+    for (const emptyDay of DEFAULT_SCHOOL_DAYS) {
+      for (let emptyPeriod = 1; emptyPeriod <= Math.min(7, maxPeriods); emptyPeriod++) {
+        // 检查这个时段是否已经被占用
+        if (isSlotOccupied(context.occupancy.classes, classId, emptyDay, emptyPeriod)) {
+          continue
+        }
+
+        // 这是一个空缺时段，尝试找到可以排在这里的课程
+        // 策略：找到该班级所有课程中，可以排在这个空缺时段的课程
+        for (const item of classItems) {
+          const teacher = teacherMap.get(item.teacherId) || teacherByEmployeeId.get(item.teacherId)
+
+          // 检查这个课程是否可以排在这个空缺时段
+          if (!canPlaceCourse(context, item.teacherId, classId, emptyDay, emptyPeriod, teacher, subjectForbiddenSlots, item.subject)) {
+            continue
+          }
+
+          // 检查每日上限
+          const dailyMax = subjectDailyMax?.get(item.subject)
+          if (dailyMax !== undefined) {
+            const currentCount = getSubjectCountOnDay(subjectDistribution, classId, emptyDay, item.subject)
+            if (currentCount >= dailyMax) {
+              continue
+            }
+          }
+
+          // 这个课程可以排在空缺时段
+          // 但该课程已经排满了周课时，需要找一个已排的时段来交换
+          // 找到该课程已排的时段中，可以被其他禁排课程填充的时段
+          const itemCells = classCells.filter(c => c.curriculumItemId === item.id && !c.isFixed)
+
+          for (const existingCell of itemCells) {
+            const existingDay = existingCell.dayOfWeek
+            const existingPeriod = existingCell.period
+
+            // 尝试找到另一个课程可以填充 existingCell 的时段
+            for (const otherItem of classItems) {
+              if (otherItem.id === item.id) continue
+
+              const otherTeacher = teacherMap.get(otherItem.teacherId) || teacherByEmployeeId.get(otherItem.teacherId)
+
+              // 检查 otherItem 是否可以排在 existingCell 的位置
+              // 需要临时释放 existingCell 的占用
+              // 先检查 otherItem 是否在 existingCell 时段被禁排
+              const forbidden = subjectForbiddenSlots?.get(otherItem.subject)
+              if (forbidden && forbidden.has(`${existingDay}_${existingPeriod}`)) {
+                // otherItem 在这个时段被禁排，不能交换
+                continue
+              }
+
+              // 检查 otherItem 的教师是否可以在 existingCell 时段上课
+              if (otherItem.teacherId && isSlotOccupied(context.occupancy.teachers, otherItem.teacherId, existingDay, existingPeriod)) {
+                continue
+              }
+
+              // 检查 otherItem 的教师避开时段
+              if (otherTeacher && isSlotInAvoidList({ dayOfWeek: existingDay, period: existingPeriod }, otherTeacher.avoidTimeSlots)) {
+                continue
+              }
+
+              // 检查每日上限
+              const otherDailyMax = subjectDailyMax?.get(otherItem.subject)
+              if (otherDailyMax !== undefined) {
+                const currentCount = getSubjectCountOnDay(subjectDistribution, classId, existingDay, otherItem.subject)
+                if (currentCount >= otherDailyMax) {
+                  continue
+                }
+              }
+
+              // 可以交换！
+              // 1. 将 item 从 existingCell 移动到空缺时段
+              // 2. 将 otherItem 放到 existingCell 的位置
+
+              // 释放 existingCell 的占用
+              context.occupancy.classes.get(classId)?.get(existingDay)?.delete(existingPeriod)
+              if (item.teacherId) {
+                context.occupancy.teachers.get(item.teacherId)?.get(existingDay)?.delete(existingPeriod)
+              }
+
+              // 更新 existingCell 为 otherItem
+              existingCell.teacherId = otherItem.teacherId
+              existingCell.subject = otherItem.subject
+              existingCell.curriculumItemId = otherItem.id
+
+              // 标记 otherItem 占用 existingCell 时段
+              if (otherItem.teacherId) {
+                markSlotOccupied(context.occupancy.teachers, otherItem.teacherId, existingDay, existingPeriod, existingCell.id)
+              }
+              markSlotOccupied(context.occupancy.classes, classId, existingDay, existingPeriod, existingCell.id)
+              incrementSubjectCount(subjectDistribution, classId, existingDay, otherItem.subject)
+
+              // 创建 item 的新单元格在空缺时段
+              const newCell = createScheduleCell(item, emptyDay, emptyPeriod, false)
+              allCells.push(newCell)
+
+              // 标记 item 占用空缺时段
+              if (item.teacherId) {
+                markSlotOccupied(context.occupancy.teachers, item.teacherId, emptyDay, emptyPeriod, newCell.id)
+              }
+              markSlotOccupied(context.occupancy.classes, classId, emptyDay, emptyPeriod, newCell.id)
+              incrementSubjectCount(subjectDistribution, classId, emptyDay, item.subject)
+
+              // 交换成功，跳出所有循环
+              break
+            }
+            break
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -603,7 +820,7 @@ export function runGreedyScheduler(
   const periodsPerDay = scheduleConfig.periodsPerDay
 
   // [P0-3] 学科绝对禁排时段： subject → Set<"dayOfWeek_period">
-  const subjectForbiddenSlots = new Map<Subject, Set<string>>()
+  const subjectForbiddenSlots = new Map<string, Set<string>>()
   for (const rule of subjectTimeRules) {
     if (rule.type === 'must_not') {
       const subject = rule.subject as Subject
@@ -615,7 +832,7 @@ export function runGreedyScheduler(
   }
 
   // [P1-1] 学科每日最大课时数： subject → dailyMax
-  const subjectDailyMax = new Map<Subject, number>()
+  const subjectDailyMax = new Map<string, number>()
   for (const rule of allSubjectRules) {
     if (rule.dailyMax !== undefined) {
       subjectDailyMax.set(rule.subject, rule.dailyMax)
@@ -623,7 +840,7 @@ export function runGreedyScheduler(
   }
 
   // [P1-2] 学科时段偏好： subject → 'morning_only' | 'afternoon_only' | 'no_preference'
-  const subjectTimePreference = new Map<Subject, string>()
+  const subjectTimePreference = new Map<string, string>()
   for (const rule of allSubjectRules) {
     if (rule.timePreference && rule.timePreference !== 'no_preference') {
       subjectTimePreference.set(rule.subject, rule.timePreference)
@@ -672,6 +889,19 @@ export function runGreedyScheduler(
       })
     }
   }
+
+  // 5. 填充空缺时段（当某些课程因禁排规则无法排在某时段时，用其他课程填充）
+  fillEmptySlots(
+    classes,
+    context,
+    allCells,
+    curriculumItems,
+    subjectDistribution,
+    subjectForbiddenSlots,
+    subjectDailyMax,
+    subjectTimePreference,
+    periodsPerDay
+  )
 
   // 按班级组织课表
   const classSchedules: ClassSchedule[] = []

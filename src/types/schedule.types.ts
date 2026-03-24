@@ -1,4 +1,4 @@
-import { DayOfWeek, Subject } from '@/data/constants'
+import { DayOfWeek, SubjectType } from '@/data/constants'
 
 /**
  * 课表单元格 - 表示一个具体时间段的课程安排
@@ -9,7 +9,7 @@ export interface ScheduleCell {
   period: number                  // 第几节课
   classId: string                 // 班级ID
   teacherId: string               // 教师ID
-  subject: Subject                // 学科
+  subject: SubjectType            // 学科（支持自定义）
   curriculumItemId: string        // 关联的教学计划条目ID
   isFixed: boolean                // 是否固定（不可调整）
   classroom?: string              // 上课地点

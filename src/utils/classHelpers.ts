@@ -1,13 +1,13 @@
 import { CurriculumItem } from '@/types/curriculum.types'
 import { Teacher } from '@/types/teacher.types'
-import { Subject } from '@/data/constants'
+import { SubjectType } from '@/data/constants'
 
 /**
  * 班级任课教师信息
  */
 export interface ClassTeacherInfo {
   teacher: Teacher
-  subjects: Subject[]
+  subjects: SubjectType[]
   weeklyHours: number
 }
 

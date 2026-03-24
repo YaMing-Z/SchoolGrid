@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
+import { SubjectType, getSubjectName, getSubjectColor } from '@/data/constants'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
@@ -31,7 +31,7 @@ export function ClassSchedulePreview() {
   const classSchedule = schedule.classSchedules.find(s => s.classId === selectedClassId)
 
   // 构建课表格子映射
-  const cellMap = new Map<string, { subject: Subject; teacherId: string }>()
+  const cellMap = new Map<string, { subject: SubjectType; teacherId: string }>()
   if (classSchedule) {
     for (const cell of classSchedule.cells) {
       cellMap.set(`${cell.dayOfWeek}_${cell.period}`, {
@@ -132,9 +132,9 @@ export function ClassSchedulePreview() {
                               <>
                                 <span
                                   className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1"
-                                  style={{ backgroundColor: SUBJECT_COLORS[cellData.subject] || '#6b7280' }}
+                                  style={{ backgroundColor: getSubjectColor(cellData.subject) }}
                                 >
-                                  {SUBJECT_NAMES[cellData.subject] || cellData.subject}
+                                  {getSubjectName(cellData.subject)}
                                 </span>
                                 <span className="text-xs text-[var(--color-text-muted)]">
                                   {getTeacherName(cellData.teacherId)}

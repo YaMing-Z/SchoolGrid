@@ -1,6 +1,6 @@
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { AdjustmentPriority } from '@/types/adjustment.types'
-import { SUBJECT_NAMES } from '@/data/constants'
+import { getSubjectName } from '@/data/constants'
 
 const priorityConfig = {
   [AdjustmentPriority.P0]: {
@@ -57,7 +57,7 @@ export function AdjustmentPanel() {
             <div>
               <h3 className="font-serif text-xl font-semibold">调课建议</h3>
               <p className="text-sm text-white/80 mt-1">
-                {SUBJECT_NAMES[selectedCell.subject]} · 第{selectedCell.period}节
+                {getSubjectName(selectedCell.subject)} · 第{selectedCell.period}节
               </p>
             </div>
             <button
@@ -82,7 +82,7 @@ export function AdjustmentPanel() {
                 当前课程
               </div>
               <div className="text-sm text-[var(--color-text-secondary)]">
-                {getTeacherName(selectedCell.teacherId)} · {SUBJECT_NAMES[selectedCell.subject]}
+                {getTeacherName(selectedCell.teacherId)} · {getSubjectName(selectedCell.subject)}
               </div>
             </div>
           </div>

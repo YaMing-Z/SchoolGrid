@@ -3,7 +3,7 @@ import { Teacher } from '@/types/teacher.types'
 import { SchoolClass } from '@/types/class.types'
 import { CurriculumItem } from '@/types/curriculum.types'
 import { ScheduleCell, SchoolSchedule, ClassSchedule } from '@/types/schedule.types'
-import { SUBJECT_NAMES, Subject } from '@/data/constants'
+import { getSubjectName } from '@/data/constants'
 import { parseMatrixExcel } from '@/parsers/matrixParser'
 import { aggregateRulesWithData, AggregationInput } from '@/services/ruleAggregator'
 import { useRuleStore } from '@/stores/ruleStore'
@@ -112,7 +112,7 @@ function createClassScheduleSheet(classSchedule: ClassSchedule): XLSX.WorkSheet 
       )
 
       if (cell) {
-        const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+        const subjectName = getSubjectName(cell.subject)
         row.push(subjectName)
       } else {
         row.push('')
@@ -225,7 +225,7 @@ function createTeacherScheduleSheet(teacher: Teacher, cells: ScheduleCell[]): XL
       const cell = cells.find(c => c.dayOfWeek === day && c.period === period)
 
       if (cell) {
-        const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+        const subjectName = getSubjectName(cell.subject)
         row.push(`${subjectName}\n(${cell.classId})`)
       } else {
         row.push('')
@@ -237,7 +237,7 @@ function createTeacherScheduleSheet(teacher: Teacher, cells: ScheduleCell[]): XL
 
   rows.push([])
   rows.push(['教师', teacher.name])
-  rows.push(['学科', SUBJECT_NAMES[teacher.subject]])
+  rows.push(['学科', getSubjectName(teacher.subject)])
   rows.push(['周课时', cells.length])
   rows.push(['课时上限', teacher.weeklyHoursLimit])
 
@@ -352,9 +352,9 @@ export function exportGradeOverviewToExcel(
   rows.push(headerRow)
 
   // 构建数据结构
-  const scheduleMap = new Map<string, Map<string, Subject>>()
+  const scheduleMap = new Map<string, Map<string, string>>()
   for (const classSchedule of schedule.classSchedules) {
-    const cellMap = new Map<string, Subject>()
+    const cellMap = new Map<string, string>()
     for (const cell of classSchedule.cells) {
       cellMap.set(`${cell.dayOfWeek}_${cell.period}`, cell.subject)
     }
@@ -370,7 +370,7 @@ export function exportGradeOverviewToExcel(
       for (const period of periods) {
         const cellKey = `${dayIndex + 1}_${period}`
         const subject = cellMap?.get(cellKey)
-        classRow.push(subject ? (SUBJECT_NAMES[subject] || subject) : '')
+        classRow.push(subject ? getSubjectName(subject) : '')
       }
     }
 
@@ -453,7 +453,7 @@ export function exportAllClassSchedules(
       for (let day = 1; day <= 5; day++) {
         const cell = cellMap.get(`${day}_${period}`)
         if (cell) {
-          const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+          const subjectName = getSubjectName(cell.subject)
           const teacherName = teacherNameMap.get(cell.teacherId) || cell.teacherId
           row.push(`${subjectName}\n(${teacherName})`)
         } else {
@@ -542,7 +542,7 @@ export function exportAllTeacherSchedules(
   const sortedSubjects = Array.from(teachersBySubject.keys()).sort()
   for (const subject of sortedSubjects) {
     const subjectTeachers = teachersBySubject.get(subject)!
-    const subjectName = SUBJECT_NAMES[subject as Subject] || subject
+    const subjectName = getSubjectName(subject)
 
     // 学科分组标题
     rows.push([])
@@ -566,7 +566,7 @@ export function exportAllTeacherSchedules(
         for (let day = 1; day <= 5; day++) {
           const cell = cellMap?.get(`${day}_${period}`)
           if (cell) {
-            const subjectName = SUBJECT_NAMES[cell.subject] || cell.subject
+            const subjectName = getSubjectName(cell.subject)
             const className = classNameMap.get(cell.classId) || cell.classId
             row.push(`${subjectName}\n(${className})`)
           } else {

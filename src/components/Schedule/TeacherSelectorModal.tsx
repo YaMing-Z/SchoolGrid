@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { useEffect } from 'react'
-import { SUBJECT_NAMES } from '@/data/constants'
+import { getSubjectName } from '@/data/constants'
 import { ClassTeacherInfo } from '@/utils/classHelpers'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
@@ -109,7 +109,7 @@ export function TeacherSelectorModal({
             <div className="space-y-2">
               {availableTeachers.map(({ teacher, subjects, weeklyHours }) => {
                 const isBusy = busyTeacherIds.has(teacher.id)
-                const subjectLabels = subjects.map(s => SUBJECT_NAMES[s]).join('、')
+                const subjectLabels = subjects.map(s => getSubjectName(s)).join('、')
 
                 return (
                   <button

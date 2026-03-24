@@ -24,7 +24,7 @@ export const DAY_OF_WEEK_NAMES: Record<DayOfWeek, string> = {
   [DayOfWeek.Sunday]: '周日',
 }
 
-// 学科枚举
+// 学科枚举（保留标准学科作为常量）
 export enum Subject {
   Chinese = 'chinese',           // 语文
   Math = 'math',                 // 数学
@@ -43,7 +43,10 @@ export enum Subject {
   Meeting = 'meeting',           // 班会
 }
 
-// 学科显示名称
+// 学科类型：支持标准学科 + 自定义学科（任意字符串）
+export type SubjectType = Subject | string
+
+// 标准学科显示名称
 export const SUBJECT_NAMES: Record<Subject, string> = {
   [Subject.Chinese]: '语文',
   [Subject.Math]: '数学',
@@ -62,7 +65,7 @@ export const SUBJECT_NAMES: Record<Subject, string> = {
   [Subject.Meeting]: '班会',
 }
 
-// 学科颜色（用于课表显示）
+// 标准学科颜色（用于课表显示）
 export const SUBJECT_COLORS: Record<Subject, string> = {
   [Subject.Chinese]: '#ef4444',      // red
   [Subject.Math]: '#3b82f6',         // blue
@@ -79,6 +82,122 @@ export const SUBJECT_COLORS: Record<Subject, string> = {
   [Subject.ComputerScience]: '#6366f1', // indigo
   [Subject.SelfStudy]: '#9ca3af',    // gray
   [Subject.Meeting]: '#78716c',      // stone
+}
+
+// ========== 自定义学科支持 ==========
+
+// 自定义学科颜色池（用于为新学科分配颜色）
+const CUSTOM_COLOR_POOL = [
+  '#14b8a6', // teal
+  '#f43f5e', // rose
+  '#8b5cf6', // violet
+  '#fbbf24', // amber
+  '#06b6d4', // cyan
+  '#84cc16', // lime
+  '#ec4899', // pink
+  '#6366f1', // indigo
+  '#0ea5e9', // sky
+  '#d946ef', // fuchsia
+  '#f97316', // orange
+  '#22d3ee', // cyan light
+  '#a3e635', // lime light
+  '#fb7185', // rose light
+  '#c084fc', // purple light
+]
+
+// 自定义学科注册表：学科ID -> 中文名称
+const customSubjectNames = new Map<string, string>()
+
+// 自定义学科颜色注册表：学科ID -> 颜色
+const customSubjectColors = new Map<string, string>()
+
+// 已使用的颜色索引
+let colorIndex = 0
+
+/**
+ * 注册自定义学科
+ * @param subjectId 学科唯一标识（如 "labor", "art1", "art2"）
+ * @param displayName 显示名称（如 "劳动", "艺术1", "艺术2"）
+ */
+export function registerCustomSubject(subjectId: string, displayName: string): void {
+  if (!customSubjectNames.has(subjectId)) {
+    customSubjectNames.set(subjectId, displayName)
+    // 分配颜色
+    const color = CUSTOM_COLOR_POOL[colorIndex % CUSTOM_COLOR_POOL.length]
+    customSubjectColors.set(subjectId, color)
+    colorIndex++
+  }
+}
+
+/**
+ * 获取学科显示名称（支持标准学科和自定义学科）
+ */
+export function getSubjectName(subject: SubjectType): string {
+  // 先检查是否是标准学科
+  if (subject in SUBJECT_NAMES) {
+    return SUBJECT_NAMES[subject as Subject]
+  }
+  // 检查自定义学科
+  const customName = customSubjectNames.get(subject)
+  if (customName) {
+    return customName
+  }
+  // 直接返回学科ID作为显示名称
+  return subject
+}
+
+/**
+ * 获取学科颜色（支持标准学科和自定义学科）
+ */
+export function getSubjectColor(subject: SubjectType): string {
+  // 先检查是否是标准学科
+  if (subject in SUBJECT_COLORS) {
+    return SUBJECT_COLORS[subject as Subject]
+  }
+  // 检查自定义学科
+  const customColor = customSubjectColors.get(subject)
+  if (customColor) {
+    return customColor
+  }
+  // 默认灰色
+  return '#9ca3af'
+}
+
+/**
+ * 获取所有已注册的学科列表（标准 + 自定义）
+ */
+export function getAllSubjects(): SubjectType[] {
+  const standardSubjects = Object.values(Subject)
+  const customSubjects = Array.from(customSubjectNames.keys())
+  return [...standardSubjects, ...customSubjects]
+}
+
+/**
+ * 根据显示名称查找学科ID
+ * @param displayName 学科显示名称（如 "语文", "劳动"）
+ * @returns 学科ID，如果未找到则返回 displayName 本身（作为新的自定义学科）
+ */
+export function findSubjectByName(displayName: string): SubjectType {
+  const normalized = displayName?.trim()
+  if (!normalized) return ''
+
+  // 1. 检查标准学科
+  for (const [key, name] of Object.entries(SUBJECT_NAMES)) {
+    if (name === normalized) {
+      return key as Subject
+    }
+  }
+
+  // 2. 检查已注册的自定义学科
+  for (const [subjectId, name] of customSubjectNames.entries()) {
+    if (name === normalized) {
+      return subjectId
+    }
+  }
+
+  // 3. 作为新的自定义学科注册，使用显示名称作为ID
+  registerCustomSubject(normalized, normalized)
+  return normalized
 }
 
 // 默认时间段配置

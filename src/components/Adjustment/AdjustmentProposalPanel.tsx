@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { SUBJECT_NAMES } from '@/data/constants'
+import { getSubjectName } from '@/data/constants'
 import { AdjustmentPriority } from '@/types/adjustment.types'
 
 const priorityConfig = {
@@ -76,28 +76,28 @@ export function AdjustmentProposalPanel() {
 🔴 原课程信息
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 时间：${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}
-课程：${SUBJECT_NAMES[originalCell.subject]}
+课程：${getSubjectName(originalCell.subject)}
 教师：${getTeacherName(originalCell.teacherId)}
 班级：${getClassName(originalCell.classId)}
 
 ${targetCell ? `🟢 目标位置现有课程
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 时间：${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
-课程：${SUBJECT_NAMES[targetCell.subject]}
+课程：${getSubjectName(targetCell.subject)}
 教师：${getTeacherName(targetCell.teacherId)}
 班级：${getClassName(targetCell.classId)}
 
 📊 调整后安排
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${SUBJECT_NAMES[originalCell.subject]} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
-${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}${SUBJECT_NAMES[targetCell.subject]} → ${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}` : `🟢 目标位置
+${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${getSubjectName(originalCell.subject)} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
+${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}${getSubjectName(targetCell.subject)} → ${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}` : `🟢 目标位置
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 时间：${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}
 状态：空闲时段（原课程将移动至此）
 
 📊 调整后安排
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${SUBJECT_NAMES[originalCell.subject]} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}`}
+${formatSlot(originalCell.dayOfWeek as number, originalCell.period)}${getSubjectName(originalCell.subject)} → ${formatSlot(targetSlot.dayOfWeek, targetSlot.period)}`}
 
 ${currentProposal.impact ? `
 👥 影响范围
@@ -167,7 +167,7 @@ ${currentProposal.violations.map(v => `• ${v.message}${v.suggestion ? `\n  建
                 {formatSlot(currentProposal.originalCell.dayOfWeek as number, currentProposal.originalCell.period)}
               </div>
               <div className="text-sm text-red-600 mt-1">
-                {SUBJECT_NAMES[currentProposal.originalCell.subject]}
+                {getSubjectName(currentProposal.originalCell.subject)}
               </div>
               <div className="text-xs text-red-500 mt-1">
                 {getTeacherName(currentProposal.originalCell.teacherId)}
@@ -197,7 +197,7 @@ ${currentProposal.violations.map(v => `• ${v.message}${v.suggestion ? `\n  建
               {targetCell ? (
                 <>
                   <div className="text-sm text-orange-600 mt-1">
-                    {SUBJECT_NAMES[targetCell.subject]}
+                    {getSubjectName(targetCell.subject)}
                   </div>
                   <div className="text-xs text-orange-500 mt-1">
                     {getTeacherName(targetCell.teacherId)}

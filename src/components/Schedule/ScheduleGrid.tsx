@@ -1,7 +1,7 @@
 import { DndContext, DragStartEvent, DragEndEvent, DragMoveEvent, DragOverlay, PointerSensor, useSensor, useSensors, CollisionDetection } from '@dnd-kit/core'
 import { useScheduleStore } from '@/stores/scheduleStore'
 import { ScheduleCell } from '@/types/schedule.types'
-import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
+import { Subject, getSubjectName, getSubjectColor } from '@/data/constants'
 import { DraggableCourse } from './DraggableCourse'
 import { DropTargetCell } from './DropTargetCell'
 import { AdjustmentProposalPanel } from '@/components/Adjustment/AdjustmentProposalPanel'
@@ -112,7 +112,7 @@ export function ScheduleGrid() {
   }
 
   // 获取教师姓名
-  const getTeacherName = (teacherId: string, cellSubject?: Subject) => {
+  const getTeacherName = (teacherId: string, cellSubject?: string) => {
     // 自习课没有指定教师时显示"待安排"
     if (cellSubject === Subject.SelfStudy && !teacherId) {
       return '待安排'
@@ -466,9 +466,9 @@ export function ScheduleGrid() {
             <div className="p-3 bg-white rounded-lg shadow-xl border-2 border-[var(--color-primary)] opacity-90">
               <div
                 className="inline-block px-2.5 py-1 rounded text-sm font-medium text-white mb-1"
-                style={{ backgroundColor: SUBJECT_COLORS[activeCell.subject] || '#6b7280' }}
+                style={{ backgroundColor: getSubjectColor(activeCell.subject) }}
               >
-                {SUBJECT_NAMES[activeCell.subject] || activeCell.subject}
+                {getSubjectName(activeCell.subject)}
               </div>
               <div className="text-xs text-[var(--color-text-secondary)]">
                 {getTeacherName(activeCell.teacherId)}

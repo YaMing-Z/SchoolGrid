@@ -1,4 +1,4 @@
-import { Subject } from '@/data/constants'
+import { SubjectType } from '@/data/constants'
 import { TimeSlotRef } from './teacher.types'
 
 /**
@@ -7,7 +7,7 @@ import { TimeSlotRef } from './teacher.types'
 export interface CurriculumItem {
   id: string                      // 唯一标识
   classId: string                 // 关联班级ID
-  subject: Subject                // 学科
+  subject: SubjectType            // 学科（支持自定义）
   teacherId: string               // 授课教师ID
   weeklyHours: number             // 周课时数
   isConsecutive: boolean          // 是否需要连堂（如实验课）
@@ -34,7 +34,7 @@ export interface Curriculum {
  */
 export interface CurriculumItemDto {
   classId: string
-  subject: Subject
+  subject: SubjectType
   teacherId: string
   weeklyHours: number
   isConsecutive?: boolean
@@ -50,5 +50,5 @@ export interface CurriculumItemDto {
 export interface CurriculumFilter {
   classId?: string
   teacherId?: string
-  subject?: Subject
+  subject?: SubjectType
 }

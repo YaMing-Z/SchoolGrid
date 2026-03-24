@@ -1,4 +1,4 @@
-import { Subject } from '@/data/constants'
+import { SubjectType } from '@/data/constants'
 
 
 /**
@@ -28,7 +28,7 @@ export interface ScheduleConfig {
  */
 export interface SubjectRule {
   id: string
-  subject: Subject
+  subject: SubjectType            // 学科（支持自定义）
   weeklyHours: number         // 默认周课时数
   isConsecutive: boolean      // 是否需要连堂
   consecutiveCount: number    // 连堂节数，通常为2
@@ -42,7 +42,7 @@ export interface SubjectRule {
  */
 export interface SubjectTimeRule {
   id: string
-  subject: Subject
+  subject: SubjectType            // 学科（支持自定义）
   dayOfWeek: number
   period: number
   type: 'fixed' | 'must_not'  // fixed: 必须排在这里(如班会), must_not: 绝对禁排(如教研活动)

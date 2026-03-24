@@ -1,14 +1,14 @@
 import { Teacher } from '@/types/teacher.types'
 import { SchoolClass, GradeLevel } from '@/types/class.types'
 import { CurriculumItem } from '@/types/curriculum.types'
-import { Subject } from '@/data/constants'
+import { Subject, SubjectType } from '@/data/constants'
 import { useRuleStore } from '@/stores/ruleStore'
 
 export interface SimpleAssignment {
   teacherName: string
   className: string
   grade: GradeLevel
-  subject: Subject
+  subject: SubjectType
 }
 
 export interface AggregationInput {
@@ -76,7 +76,7 @@ export function aggregateRulesWithData(input: AggregationInput): AggregatedResul
       employeeId: defaultEmployeeId,
       name: name,
       // 如果老师教多个科目，随机取一个或者定义为通用，这里为了类型正确，暂时取教的第一个科目，后文再完善
-      subject: Object.values(Subject)[0], 
+      subject: Subject.Chinese, // 默认语文，后续会被实际科目覆盖
       weeklyHoursLimit: teacherLoadRule.defaultMaxWeeklyHours,
       avoidTimeSlots: avoidTimeSlots,
       isActive: true

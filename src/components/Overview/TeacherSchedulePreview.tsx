@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
+import { SubjectType, getSubjectName, getSubjectColor } from '@/data/constants'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 import { Teacher } from '@/types/teacher.types'
 
@@ -28,9 +28,9 @@ export function TeacherSchedulePreview() {
 
   // 构建教师课表映射
   const teacherScheduleMap = useMemo(() => {
-    if (!schedule) return new Map<string, Map<string, { subject: Subject; classId: string }>>()
+    if (!schedule) return new Map<string, Map<string, { subject: SubjectType; classId: string }>>()
 
-    const map = new Map<string, Map<string, { subject: Subject; classId: string }>>()
+    const map = new Map<string, Map<string, { subject: SubjectType; classId: string }>>()
 
     for (const classSchedule of schedule.classSchedules) {
       for (const cell of classSchedule.cells) {
@@ -87,7 +87,7 @@ export function TeacherSchedulePreview() {
           {Array.from(teachersBySubject.entries()).map(([subject, subjectTeachers]) => (
             <div key={subject}>
               <div className="px-3 py-2 bg-[var(--color-bg-tertiary)] text-xs font-medium text-[var(--color-text-muted)] sticky top-0">
-                {SUBJECT_NAMES[subject as Subject] || subject}
+                {getSubjectName(subject)}
               </div>
               {subjectTeachers.map((teacher) => {
                 const teacherCells = teacherScheduleMap.get(teacher.id)
@@ -125,7 +125,7 @@ export function TeacherSchedulePreview() {
               </h3>
               <div className="flex items-center gap-4 text-sm">
                 <span className="text-[var(--color-text-secondary)]">
-                  学科：<span className="font-medium">{SUBJECT_NAMES[selectedTeacher.subject] || selectedTeacher.subject}</span>
+                  学科：<span className="font-medium">{getSubjectName(selectedTeacher.subject)}</span>
                 </span>
                 <span className="text-[var(--color-text-secondary)]">
                   周课时：<span className="font-medium text-[var(--color-primary)]">{weeklyHours}</span> 节
@@ -185,9 +185,9 @@ export function TeacherSchedulePreview() {
                               <>
                                 <span
                                   className="inline-block px-2 py-0.5 rounded text-xs font-medium text-white mb-1"
-                                  style={{ backgroundColor: SUBJECT_COLORS[cellData.subject] || '#6b7280' }}
+                                  style={{ backgroundColor: getSubjectColor(cellData.subject) }}
                                 >
-                                  {SUBJECT_NAMES[cellData.subject] || cellData.subject}
+                                  {getSubjectName(cellData.subject)}
                                 </span>
                                 <span className="text-xs text-[var(--color-text-muted)]">
                                   {getClassName(cellData.classId)}

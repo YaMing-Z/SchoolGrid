@@ -1,5 +1,5 @@
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
+import { SubjectType, getSubjectName, getSubjectColor, getAllSubjects } from '@/data/constants'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 
 const DAYS = ['周一', '周二', '周三', '周四', '周五']
@@ -19,10 +19,10 @@ export function GradeOverviewTable() {
   }
 
   // 构建数据结构：classId -> dayOfWeek_period -> cell
-  const scheduleMap = new Map<string, Map<string, { subject: Subject; teacherId: string }>>()
+  const scheduleMap = new Map<string, Map<string, { subject: SubjectType; teacherId: string }>>()
 
   for (const classSchedule of schedule.classSchedules) {
-    const classCellMap = new Map<string, { subject: Subject; teacherId: string }>()
+    const classCellMap = new Map<string, { subject: SubjectType; teacherId: string }>()
     for (const cell of classSchedule.cells) {
       classCellMap.set(`${cell.dayOfWeek}_${cell.period}`, {
         subject: cell.subject,
@@ -31,6 +31,9 @@ export function GradeOverviewTable() {
     }
     scheduleMap.set(classSchedule.classId, classCellMap)
   }
+
+  // 获取所有学科用于图例
+  const allSubjects = getAllSubjects()
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-border-light)] overflow-hidden flex-1 flex flex-col min-h-0">
@@ -82,8 +85,8 @@ export function GradeOverviewTable() {
                         )
                       }
 
-                      const subjectName = SUBJECT_NAMES[cellData.subject] || cellData.subject
-                      const bgColor = SUBJECT_COLORS[cellData.subject] || '#6b7280'
+                      const subjectName = getSubjectName(cellData.subject)
+                      const bgColor = getSubjectColor(cellData.subject)
 
                       return (
                         <td
@@ -111,13 +114,13 @@ export function GradeOverviewTable() {
       <div className="px-4 py-3 border-t border-[var(--color-border-light)] bg-[var(--color-bg-secondary)]/50">
         <div className="flex items-center gap-4 flex-wrap">
           <span className="text-xs text-[var(--color-text-muted)]">学科图例：</span>
-          {Object.entries(SUBJECT_NAMES).map(([key, name]) => (
-            <div key={key} className="flex items-center gap-1.5">
+          {allSubjects.map((subject) => (
+            <div key={subject} className="flex items-center gap-1.5">
               <span
                 className="w-3 h-3 rounded-sm"
-                style={{ backgroundColor: SUBJECT_COLORS[key as Subject] || '#6b7280' }}
+                style={{ backgroundColor: getSubjectColor(subject) }}
               />
-              <span className="text-xs text-[var(--color-text-secondary)]">{name}</span>
+              <span className="text-xs text-[var(--color-text-secondary)]">{getSubjectName(subject)}</span>
             </div>
           ))}
         </div>

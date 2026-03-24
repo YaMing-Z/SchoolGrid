@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { Subject, SUBJECT_NAMES } from '@/data/constants'
+import { SubjectType, findSubjectByName } from '@/data/constants'
 import { CurriculumItem } from '@/types/curriculum.types'
 import { TimeSlotRef } from '@/types/teacher.types'
 
@@ -22,18 +22,13 @@ interface CurriculumRowData {
 }
 
 /**
- * 将学科名称转换为Subject枚举
+ * 将学科名称转换为SubjectType（支持自定义学科）
  */
-function parseSubject(subjectName: string): Subject | null {
+function parseSubject(subjectName: string): SubjectType | null {
   const normalizedName = subjectName?.trim()
   if (!normalizedName) return null
 
-  for (const [key, value] of Object.entries(SUBJECT_NAMES)) {
-    if (value === normalizedName) {
-      return key as Subject
-    }
-  }
-  return null
+  return findSubjectByName(normalizedName)
 }
 
 /**
@@ -242,7 +237,7 @@ export function createCurriculumDto(item: Omit<CurriculumItem, 'id'>): Curriculu
 
 interface CurriculumItemDto {
   classId: string
-  subject: Subject
+  subject: SubjectType
   teacherId: string
   weeklyHours: number
   isConsecutive?: boolean

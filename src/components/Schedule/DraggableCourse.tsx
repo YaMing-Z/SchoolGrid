@@ -2,12 +2,12 @@ import { useDraggable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { useState, useRef } from 'react'
 import { ScheduleCell } from '@/types/schedule.types'
-import { SUBJECT_NAMES, SUBJECT_COLORS, Subject } from '@/data/constants'
+import { Subject, getSubjectName, getSubjectColor, SubjectType } from '@/data/constants'
 import { useScheduleStore } from '@/stores/scheduleStore'
 
 interface DraggableCourseProps {
   cell: ScheduleCell
-  getTeacherName: (teacherId: string, subject?: Subject) => string
+  getTeacherName: (teacherId: string, subject?: SubjectType) => string
   onClick?: () => void
 }
 
@@ -93,9 +93,9 @@ export function DraggableCourse({ cell, getTeacherName, onClick }: DraggableCour
       <div>
         <div
           className="inline-block px-2.5 py-1 rounded text-sm font-medium text-white mb-1.5"
-          style={{ backgroundColor: SUBJECT_COLORS[cell.subject] || '#6b7280' }}
+          style={{ backgroundColor: getSubjectColor(cell.subject) }}
         >
-          {SUBJECT_NAMES[cell.subject] || cell.subject}
+          {getSubjectName(cell.subject)}
         </div>
         <div className="text-xs text-[var(--color-text-secondary)]">
           {teacherName}

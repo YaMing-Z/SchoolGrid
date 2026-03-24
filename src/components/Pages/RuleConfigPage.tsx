@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useRuleStore, DEFAULT_SCHEDULE_CONFIG } from '@/stores/ruleStore'
 import { useScheduleStore } from '@/stores/scheduleStore'
-import { Subject, SUBJECT_NAMES } from '@/data/constants'
+import { Subject, getSubjectName } from '@/data/constants'
 import { useScheduleConfig } from '@/hooks/useScheduleConfig'
 import { GenerateScheduleConfirmModal } from '@/components/Dashboard/GenerateScheduleConfirmModal'
 
@@ -131,7 +131,7 @@ function SubjectRuleConfig() {
   const currentRules = subjectRules
   
   // 从导入数据中提取可选学科，并确保「班会」「自习」作为底部的默认选项
-  const importedSubjects = new Set<Subject>()
+  const importedSubjects = new Set<string>()
   rawImportData?.assignments.forEach(a => importedSubjects.add(a.subject))
   const availableBaseSubjects = Array.from(importedSubjects)
   if (!availableBaseSubjects.includes(Subject.Meeting)) {
@@ -223,11 +223,11 @@ function SubjectRuleConfig() {
                         onChange={(e) => updateSubjectRule(rule.id, { subject: e.target.value as Subject })}
                         className="w-[110px] px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary-light)] focus:border-transparent transition-all duration-200 font-medium text-sm text-[var(--color-text-primary)] shadow-sm cursor-pointer"
                       >
-                        <option value={rule.subject}>{SUBJECT_NAMES[rule.subject] || rule.subject}</option>
+                        <option value={rule.subject}>{getSubjectName(rule.subject)}</option>
                         {availableBaseSubjects
                           .filter(s => s !== rule.subject && !assignedSubjects.includes(s))
                           .map(s => (
-                            <option key={s} value={s}>{SUBJECT_NAMES[s] || s}</option>
+                            <option key={s} value={s}>{getSubjectName(s)}</option>
                           ))
                         }
                       </select>
@@ -320,7 +320,7 @@ function SubjectRuleConfig() {
              >
                <option value="" disabled>-- 请选择一个学科 --</option>
                {availableBaseSubjects.map(s => (
-                 <option key={s} value={s}>{SUBJECT_NAMES[s] || s}</option>
+                 <option key={s} value={s}>{getSubjectName(s)}</option>
                ))}
              </select>
            </div>
@@ -410,12 +410,12 @@ function SubjectRuleConfig() {
                                      : 'bg-red-100 text-red-800 border-red-200'
                                  } ${rule.subject === selectedSubject ? 'ring-1 ring-offset-1 ring-black/20 font-bold scale-105 transition-transform' : ''}`}
                                >
-                                 <span>{SUBJECT_NAMES[rule.subject] || rule.subject}</span>
+                                 <span>{getSubjectName(rule.subject)}</span>
                                  <span>{rule.type === 'fixed' ? '📌' : '🚫'}</span>
                                  <button 
                                    onClick={(e) => { e.stopPropagation(); removeSubjectTimeRule(rule.id) }}
                                    className="ml-0.5 opacity-60 hover:opacity-100 hover:text-red-700 transition-colors p-0.5 rounded-sm hover:bg-black/10"
-                                   title={`删除 ${SUBJECT_NAMES[rule.subject] || rule.subject} 的约束`}
+                                   title={`删除 ${getSubjectName(rule.subject)} 的约束`}
                                  >
                                    ×
                                  </button>
@@ -433,7 +433,7 @@ function SubjectRuleConfig() {
                            {/* 快捷悬浮提示（当已有别的科目标签，但在 hover 时提示可以添加当前科目） */}
                            {rulesInSlot.length > 0 && selectedSubject && !existingRule && (
                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-white/90 backdrop-blur-[1px] z-20 transition-opacity">
-                               <span className="text-[var(--color-primary)] text-xs font-medium border border-[var(--color-primary-light)] px-2 py-1 rounded bg-blue-50">+ {SUBJECT_NAMES[selectedSubject] || selectedSubject} 约束</span>
+                               <span className="text-[var(--color-primary)] text-xs font-medium border border-[var(--color-primary-light)] px-2 py-1 rounded bg-blue-50">+ {getSubjectName(selectedSubject)} 约束</span>
                              </div>
                            )}
                          </div>
