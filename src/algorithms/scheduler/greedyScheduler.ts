@@ -13,6 +13,9 @@ import { SchoolClass } from '@/types/class.types'
 import { DayOfWeek, Subject, DEFAULT_SCHOOL_DAYS } from '@/data/constants'
 import { useRuleStore } from '@/stores/ruleStore'
 
+// 定义主科列表（语文、数学、英语）
+const MAIN_SUBJECTS = [Subject.Chinese, Subject.Math, Subject.English]
+
 // 获取当前配置的每天节次数
 function getPeriodsPerDay(): number {
   const { scheduleConfig } = useRuleStore.getState()
@@ -178,6 +181,196 @@ function incrementSubjectCount(
 }
 
 /**
+ * 计算主科的标准日分布（每个班级的目标日分布）
+ * 返回 Map<subject, Map<dayOfWeek, targetCount>>
+ * 例如：语文6节/周，标准分布可能是 {1: 2, 2: 1, 3: 1, 4: 1, 5: 1}
+ *
+ * 注意：这里计算的是"目标分布"，所有班级都应该尽量遵循这个分布
+ */
+function calculateStandardDailyDistribution(
+  curriculumItems: CurriculumItem[],
+  mainSubjects: string[]
+): Map<string, Map<number, number>> {
+  const result = new Map<string, Map<number, number>>()
+
+  // 收集每个主科的周课时数（取众数或最常见的值）
+  // 这样可以确保所有班级都使用相同的分布
+  const subjectHoursList = new Map<string, number[]>()
+  for (const item of curriculumItems) {
+    if (mainSubjects.includes(item.subject)) {
+      if (!subjectHoursList.has(item.subject)) {
+        subjectHoursList.set(item.subject, [])
+      }
+      subjectHoursList.get(item.subject)!.push(item.weeklyHours)
+    }
+  }
+
+  // 为每个主科计算标准日分布（使用最常见的周课时数）
+  for (const [subject, hoursList] of subjectHoursList) {
+    // 找出最常见的周课时数
+    const hoursCount = new Map<number, number>()
+    for (const hours of hoursList) {
+      hoursCount.set(hours, (hoursCount.get(hours) || 0) + 1)
+    }
+    let mostCommonHours = 0
+    let maxCount = 0
+    for (const [hours, count] of hoursCount) {
+      if (count > maxCount) {
+        maxCount = count
+        mostCommonHours = hours
+      }
+    }
+
+    // 分配课时：先每天1节，剩余课时均匀分配到前几天
+    const dayDistribution = new Map<number, number>()
+    let remaining = mostCommonHours
+
+    // 先给每天分配1节
+    for (const day of DEFAULT_SCHOOL_DAYS) {
+      if (remaining > 0) {
+        dayDistribution.set(day, 1)
+        remaining--
+      }
+    }
+
+    // 剩余课时分配到前几天
+    for (const day of DEFAULT_SCHOOL_DAYS) {
+      if (remaining <= 0) break
+      dayDistribution.set(day, (dayDistribution.get(day) || 0) + 1)
+      remaining--
+    }
+
+    result.set(subject, dayDistribution)
+  }
+
+  return result
+}
+
+/**
+ * 判断某节次是否为上午
+ * 假设上午为1-4节，下午为5节及以后
+ */
+function isMorningPeriod(period: number, morningPeriodCount: number = 4): boolean {
+  return period <= morningPeriodCount
+}
+
+/**
+ * 获取教师在某节次的使用次数
+ */
+function getTeacherPeriodUsage(
+  usage: Map<string, number>,
+  teacherId: string,
+  period: number
+): number {
+  const key = `${teacherId}_${period}`
+  return usage.get(key) || 0
+}
+
+/**
+ * 增加教师在某节次的使用次数
+ */
+function incrementTeacherPeriodUsage(
+  usage: Map<string, number>,
+  teacherId: string,
+  period: number
+): void {
+  const key = `${teacherId}_${period}`
+  usage.set(key, (usage.get(key) || 0) + 1)
+}
+
+/**
+ * 获取教师+学科在某天某时段类型的排课数
+ */
+function getTeacherSubjectDaySlotCount(
+  distribution: Map<string, number>,
+  teacherId: string,
+  subject: string,
+  dayOfWeek: number,
+  isMorning: boolean
+): number {
+  const key = `${teacherId}_${subject}_${dayOfWeek}_${isMorning ? 'morning' : 'afternoon'}`
+  return distribution.get(key) || 0
+}
+
+/**
+ * 增加教师+学科在某天某时段类型的排课数
+ */
+function incrementTeacherSubjectDaySlot(
+  distribution: Map<string, number>,
+  teacherId: string,
+  subject: string,
+  dayOfWeek: number,
+  isMorning: boolean
+): void {
+  const key = `${teacherId}_${subject}_${dayOfWeek}_${isMorning ? 'morning' : 'afternoon'}`
+  distribution.set(key, (distribution.get(key) || 0) + 1)
+}
+
+/**
+ * 增加全校某学科在某天的已排课时数
+ */
+function incrementSchoolSubjectDayCount(
+  distribution: Map<string, number>,
+  subject: string,
+  dayOfWeek: number
+): void {
+  const key = `${subject}_${dayOfWeek}`
+  distribution.set(key, (distribution.get(key) || 0) + 1)
+}
+
+/**
+ * 获取某班级某天某学科在上午/下午的已排课数
+ */
+function getClassDaySubjectMorningAfternoonCount(
+  distribution: Map<string, number>,
+  classId: string,
+  dayOfWeek: number,
+  subject: string,
+  isMorning: boolean
+): number {
+  const key = `${classId}_${dayOfWeek}_${subject}_${isMorning ? 'morning' : 'afternoon'}`
+  return distribution.get(key) || 0
+}
+
+/**
+ * 增加某班级某天某学科在上午/下午的已排课数
+ */
+function incrementClassDaySubjectMorningAfternoon(
+  distribution: Map<string, number>,
+  classId: string,
+  dayOfWeek: number,
+  subject: string,
+  isMorning: boolean
+): void {
+  const key = `${classId}_${dayOfWeek}_${subject}_${isMorning ? 'morning' : 'afternoon'}`
+  distribution.set(key, (distribution.get(key) || 0) + 1)
+}
+
+/**
+ * 获取某班级某天的主课总数
+ */
+function getClassDayMainSubjectCount(
+  distribution: Map<string, number>,
+  classId: string,
+  dayOfWeek: number
+): number {
+  const key = `${classId}_${dayOfWeek}`
+  return distribution.get(key) || 0
+}
+
+/**
+ * 增加某班级某天的主课总数
+ */
+function incrementClassDayMainSubjectCount(
+  distribution: Map<string, number>,
+  classId: string,
+  dayOfWeek: number
+): void {
+  const key = `${classId}_${dayOfWeek}`
+  distribution.set(key, (distribution.get(key) || 0) + 1)
+}
+
+/**
  * 计算课程的约束程度（用于排序）
  */
 function calculateConstraintScore(item: CurriculumItem): number {
@@ -317,11 +510,20 @@ function placeFixedSlots(
   cells: ScheduleCell[],
   conflicts: ScheduleConflict[],
   teacher: Teacher | undefined,
-  subjectDistribution: Map<string, number>
+  subjectDistribution: Map<string, number>,
+  // 新增：主科优化追踪器
+  schoolSubjectDayCount?: Map<string, number>,
+  teacherSubjectDaySlots?: Map<string, number>,
+  teacherPeriodUsage?: Map<string, number>,
+  classDaySubjectMorningAfternoon?: Map<string, number>
 ): number {
   if (!item.fixedSlots || item.fixedSlots.length === 0) {
     return 0
   }
+
+  // 检查是否是主科
+  const isMainSubject = MAIN_SUBJECTS.includes(item.subject as Subject)
+  const morningPeriodCount = 4
 
   let placed = 0
   for (const slot of item.fixedSlots) {
@@ -348,6 +550,35 @@ function placeFixedSlots(
 
       // 更新学科分布
       incrementSubjectCount(subjectDistribution, item.classId, slot.dayOfWeek, item.subject)
+
+      // 更新主科优化追踪器
+      if (isMainSubject) {
+        const isMorning = isMorningPeriod(slot.period, morningPeriodCount)
+
+        // 更新全校学科日分布
+        if (schoolSubjectDayCount) {
+          incrementSchoolSubjectDayCount(schoolSubjectDayCount, item.subject, slot.dayOfWeek)
+        }
+
+        // 更新班级-天-学科-上午/下午分布
+        if (classDaySubjectMorningAfternoon) {
+          incrementClassDaySubjectMorningAfternoon(
+            classDaySubjectMorningAfternoon, item.classId, slot.dayOfWeek, item.subject, isMorning
+          )
+        }
+
+        // 更新教师-学科-天-时段分布
+        if (teacherSubjectDaySlots && item.teacherId) {
+          incrementTeacherSubjectDaySlot(
+            teacherSubjectDaySlots, item.teacherId, item.subject, slot.dayOfWeek, isMorning
+          )
+        }
+
+        // 更新教师节次使用频率
+        if (teacherPeriodUsage && item.teacherId) {
+          incrementTeacherPeriodUsage(teacherPeriodUsage, item.teacherId, slot.period)
+        }
+      }
 
       placed++
     } else {
@@ -387,6 +618,7 @@ function placeFixedSlots(
  * 优先选择当天该学科课程最少的日期
  * [P1-1] 当日已排数 >= dailyMax 时整天跳过
  * [P1-2] 根据 timePreference 对节次评分加成
+ * [优化] 主科额外评分规则（与单节课类似，但简化处理）
  */
 function findBestConsecutiveSlot(
   item: CurriculumItem,
@@ -397,7 +629,10 @@ function findBestConsecutiveSlot(
   subjectForbiddenSlots?: Map<string, Set<string>>,
   subjectDailyMax?: Map<string, number>,
   subjectTimePreference?: Map<string, string>,
-  periodsPerDay?: number
+  periodsPerDay?: number,
+  // 新增：主科优化追踪器（连堂课不使用上下午分布检查）
+  standardDailyDistribution?: Map<string, Map<number, number>>,
+  teacherSubjectDaySlots?: Map<string, number>
 ): { dayOfWeek: number; startPeriod: number } | null {
   // 计算每天该学科的课程数
   const dayScores: { day: number; score: number; startPeriod: number }[] = []
@@ -408,6 +643,10 @@ function findBestConsecutiveSlot(
   const timePreference = subjectTimePreference?.get(item.subject)
   // 获取每天节次数
   const maxPeriods = periodsPerDay || getPeriodsPerDay()
+
+  // 检查是否是主科
+  const isMainSubject = MAIN_SUBJECTS.includes(item.subject as Subject)
+  const morningPeriodCount = 4
 
   for (const day of DEFAULT_SCHOOL_DAYS) {
     // 计算当天该学科已有的课程数
@@ -438,10 +677,46 @@ function findBestConsecutiveSlot(
         preferenceScore = earliestPeriod > 4 ? -50 : 100
       }
 
+      // 主科优化评分（连堂课简化处理，主要考虑全校进度同步）
+      let mainSubjectScore = 0
+      if (isMainSubject) {
+        const isMorning = isMorningPeriod(earliestPeriod, morningPeriodCount)
+
+        // 规则2：全校进度同步（比较该班级在该天的已排数与目标数）
+        if (standardDailyDistribution) {
+          const standardCount = standardDailyDistribution.get(item.subject)?.get(day) || 0
+          // currentCount 已经在上面计算过了，是该班级该天该科的已排数
+
+          if (currentCount < standardCount) {
+            // 该班级该天还没达到目标课时数，大幅加分（鼓励选择这天）
+            mainSubjectScore -= 150
+          } else if (currentCount >= standardCount) {
+            // 该班级该天已达到或超过目标课时数，惩罚（不鼓励选择这天）
+            mainSubjectScore += 100
+          }
+        }
+
+        // 规则3：教师进度同步
+        if (teacherSubjectDaySlots && item.teacherId) {
+          const teacherMorningCount = getTeacherSubjectDaySlotCount(
+            teacherSubjectDaySlots, item.teacherId, item.subject, day, true
+          )
+          const teacherAfternoonCount = getTeacherSubjectDaySlotCount(
+            teacherSubjectDaySlots, item.teacherId, item.subject, day, false
+          )
+
+          if (teacherMorningCount > teacherAfternoonCount) {
+            if (isMorning) mainSubjectScore -= 100
+          } else if (teacherAfternoonCount > teacherMorningCount) {
+            if (!isMorning) mainSubjectScore -= 100
+          }
+        }
+      }
+
       // 分数越低越好（当天该学科课程越少越好）
       dayScores.push({
         day,
-        score: currentCount * 10 + (earliestPeriod - 1) + preferenceScore,
+        score: currentCount * 10 + (earliestPeriod - 1) + preferenceScore + mainSubjectScore,
         startPeriod: earliestPeriod
       })
     }
@@ -473,16 +748,31 @@ function placeConsecutiveCourse(
   subjectForbiddenSlots?: Map<string, Set<string>>,
   subjectDailyMax?: Map<string, number>,
   subjectTimePreference?: Map<string, string>,
-  periodsPerDay?: number
+  periodsPerDay?: number,
+  // 新增：主科优化追踪器
+  standardDailyDistribution?: Map<string, Map<number, number>>,
+  schoolSubjectDayCount?: Map<string, number>,
+  teacherSubjectDaySlots?: Map<string, number>,
+  teacherPeriodUsage?: Map<string, number>,
+  classDaySubjectMorningAfternoon?: Map<string, number>,
+  classDayMainSubjectCount?: Map<string, number>
 ): number {
   const consecutiveCount = item.consecutiveCount || 2
   const groupsToPlace = Math.floor(remainingHours / consecutiveCount)
   const maxPeriods = periodsPerDay || getPeriodsPerDay()
+  const morningPeriodCount = 4
+
+  // 检查是否是主科
+  const isMainSubject = MAIN_SUBJECTS.includes(item.subject as Subject)
 
   let placed = 0
 
   for (let g = 0; g < groupsToPlace; g++) {
-    const bestSlot = findBestConsecutiveSlot(item, context, consecutiveCount, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods)
+    const bestSlot = findBestConsecutiveSlot(
+      item, context, consecutiveCount, teacher, subjectDistribution,
+      subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods,
+      standardDailyDistribution, teacherSubjectDaySlots
+    )
 
     if (bestSlot) {
       // 放置连堂课
@@ -497,6 +787,40 @@ function placeConsecutiveCourse(
         markSlotOccupied(context.occupancy.classes, item.classId, bestSlot.dayOfWeek, p, cell.id)
 
         incrementSubjectCount(subjectDistribution, item.classId, bestSlot.dayOfWeek, item.subject)
+
+        // 更新主科优化追踪器
+        if (isMainSubject) {
+          const isMorning = isMorningPeriod(p, morningPeriodCount)
+
+          // 更新全校学科日分布
+          if (schoolSubjectDayCount) {
+            incrementSchoolSubjectDayCount(schoolSubjectDayCount, item.subject, bestSlot.dayOfWeek)
+          }
+
+          // 更新班级-天-学科-上午/下午分布
+          if (classDaySubjectMorningAfternoon) {
+            incrementClassDaySubjectMorningAfternoon(
+              classDaySubjectMorningAfternoon, item.classId, bestSlot.dayOfWeek, item.subject, isMorning
+            )
+          }
+
+          // 更新班级每天主课总数
+          if (classDayMainSubjectCount) {
+            incrementClassDayMainSubjectCount(classDayMainSubjectCount, item.classId, bestSlot.dayOfWeek)
+          }
+
+          // 更新教师-学科-天-时段分布
+          if (teacherSubjectDaySlots && item.teacherId) {
+            incrementTeacherSubjectDaySlot(
+              teacherSubjectDaySlots, item.teacherId, item.subject, bestSlot.dayOfWeek, isMorning
+            )
+          }
+
+          // 更新教师节次使用频率
+          if (teacherPeriodUsage && item.teacherId) {
+            incrementTeacherPeriodUsage(teacherPeriodUsage, item.teacherId, p)
+          }
+        }
 
         placed++
       }
@@ -513,6 +837,12 @@ function placeConsecutiveCourse(
  * 优先选择当天该学科课程最少的日期
  * [P1-1] 当日已排数 >= dailyMax 时整天跳过
  * [P1-2] 根据 timePreference 对节次评分加成
+ * [优化] 主科额外评分规则：
+ *   - 同日同科上下午分布（权重最高 -500/+400）
+ *   - 每日主课上限（权重次高 -200/+150）
+ *   - 全校进度同步（权重中等 -150/+100）
+ *   - 教师进度同步（权重较低 -100）
+ *   - 教师节次分散（权重最低 +30/次）
  */
 function findBestRegularSlot(
   item: CurriculumItem,
@@ -522,7 +852,13 @@ function findBestRegularSlot(
   subjectForbiddenSlots?: Map<string, Set<string>>,
   subjectDailyMax?: Map<string, number>,
   subjectTimePreference?: Map<string, string>,
-  periodsPerDay?: number
+  periodsPerDay?: number,
+  // 新增：主科优化追踪器
+  standardDailyDistribution?: Map<string, Map<number, number>>,
+  teacherSubjectDaySlots?: Map<string, number>,
+  teacherPeriodUsage?: Map<string, number>,
+  classDaySubjectMorningAfternoon?: Map<string, number>,
+  classDayMainSubjectCount?: Map<string, number>
 ): { dayOfWeek: number; period: number } | null {
   // 计算每天该学科的课程数
   const slotScores: { day: number; period: number; score: number }[] = []
@@ -533,6 +869,12 @@ function findBestRegularSlot(
   const timePreference = subjectTimePreference?.get(item.subject)
   // 获取每天节次数
   const maxPeriods = periodsPerDay || getPeriodsPerDay()
+
+  // 检查是否是主科
+  const isMainSubject = MAIN_SUBJECTS.includes(item.subject as Subject)
+
+  // 上午节次数量（假设1-4节是上午）
+  const morningPeriodCount = 4
 
   for (const day of DEFAULT_SCHOOL_DAYS) {
     // 计算当天该学科已有的课程数
@@ -562,6 +904,105 @@ function findBestRegularSlot(
           periodScore = (maxPeriods - period + 1) * 10 // 最后一节得分最低（最优），第1节得分最高
         }
 
+        // 主科优化评分
+        let mainSubjectScore = 0
+        if (isMainSubject) {
+          const isMorning = isMorningPeriod(period, morningPeriodCount)
+
+          // 规则1：同日同科上下午分布（权重最高）
+          // 如果当天已有课程，必须分布在上午和下午
+          if (classDaySubjectMorningAfternoon) {
+            const existingMorningCount = getClassDaySubjectMorningAfternoonCount(
+              classDaySubjectMorningAfternoon, item.classId, day, item.subject, true
+            )
+            const existingAfternoonCount = getClassDaySubjectMorningAfternoonCount(
+              classDaySubjectMorningAfternoon, item.classId, day, item.subject, false
+            )
+
+            if (existingMorningCount > 0 && existingAfternoonCount === 0) {
+              // 已有上午课，没有下午课
+              if (!isMorning) {
+                // 选择下午时段：大幅加分（鼓励）
+                mainSubjectScore -= 500
+              } else {
+                // 选择上午时段：大幅惩罚（避免都集中在上午）
+                mainSubjectScore += 400
+              }
+            } else if (existingAfternoonCount > 0 && existingMorningCount === 0) {
+              // 已有下午课，没有上午课
+              if (isMorning) {
+                // 选择上午时段：大幅加分（鼓励）
+                mainSubjectScore -= 500
+              } else {
+                // 选择下午时段：大幅惩罚（避免都集中在下午）
+                mainSubjectScore += 400
+              }
+            }
+          }
+
+          // 规则1.5：每日主课上限（权重次高）
+          // 限制每天的主课总数，让主课均匀分布在一周
+          // 假设每天最多3节主课（语数外共3门，每门每天最多1节，或其中一门2节）
+          if (classDayMainSubjectCount) {
+            const dailyMainSubjectCount = getClassDayMainSubjectCount(
+              classDayMainSubjectCount, item.classId, day
+            )
+            // 每天主课上限设为3节
+            const maxMainSubjectsPerDay = 3
+
+            if (dailyMainSubjectCount >= maxMainSubjectsPerDay) {
+              // 当天主课已满，大幅惩罚（尽量避免）
+              mainSubjectScore += 300
+            } else if (dailyMainSubjectCount >= maxMainSubjectsPerDay - 1) {
+              // 当天主课快满了，适度惩罚
+              mainSubjectScore += 150
+            } else {
+              // 当天主课还不多，鼓励选择这天
+              mainSubjectScore -= 200
+            }
+          }
+
+          // 规则2：全校进度同步（权重次高）
+          // 比较该班级在该天的已排数与目标数，让所有班级都遵循相同的目标分布
+          if (standardDailyDistribution) {
+            const standardCount = standardDailyDistribution.get(item.subject)?.get(day) || 0
+            // currentCount 已经在上面计算过了，是该班级该天该科的已排数
+
+            if (currentCount < standardCount) {
+              // 该班级该天还没达到目标课时数，鼓励选择这天
+              mainSubjectScore -= 200
+            } else if (currentCount >= standardCount) {
+              // 该班级该天已达到或超过目标课时数，大幅惩罚（不鼓励选择这天）
+              // 这个权重必须足够大，确保不会超过目标分布
+              mainSubjectScore += 400
+            }
+          }
+
+          // 规则3：教师进度同步（权重较低 -100）
+          if (teacherSubjectDaySlots && item.teacherId) {
+            const teacherMorningCount = getTeacherSubjectDaySlotCount(
+              teacherSubjectDaySlots, item.teacherId, item.subject, day, true
+            )
+            const teacherAfternoonCount = getTeacherSubjectDaySlotCount(
+              teacherSubjectDaySlots, item.teacherId, item.subject, day, false
+            )
+
+            if (teacherMorningCount > teacherAfternoonCount) {
+              // 其他班多在上午，给上午加分
+              if (isMorning) mainSubjectScore -= 100
+            } else if (teacherAfternoonCount > teacherMorningCount) {
+              // 其他班多在下午，给下午加分
+              if (!isMorning) mainSubjectScore -= 100
+            }
+          }
+
+          // 规则4：教师节次分散（权重最低 +30/次）
+          if (teacherPeriodUsage && item.teacherId) {
+            const periodUsage = getTeacherPeriodUsage(teacherPeriodUsage, item.teacherId, period)
+            mainSubjectScore += periodUsage * 30  // 每多用一次，分数增加30
+          }
+        }
+
         // 分数越低越好
         // 当天该学科课程越少越好
         // 普通课程：节次越靠前越好（period 小）
@@ -569,7 +1010,7 @@ function findBestRegularSlot(
         slotScores.push({
           day,
           period,
-          score: currentCount * 100 + periodScore + preferenceScore
+          score: currentCount * 100 + periodScore + preferenceScore + mainSubjectScore
         })
       }
     }
@@ -601,13 +1042,29 @@ function placeRegularCourse(
   subjectForbiddenSlots?: Map<string, Set<string>>,
   subjectDailyMax?: Map<string, number>,
   subjectTimePreference?: Map<string, string>,
-  periodsPerDay?: number
+  periodsPerDay?: number,
+  // 新增：主科优化追踪器
+  standardDailyDistribution?: Map<string, Map<number, number>>,
+  schoolSubjectDayCount?: Map<string, number>,
+  teacherSubjectDaySlots?: Map<string, number>,
+  teacherPeriodUsage?: Map<string, number>,
+  classDaySubjectMorningAfternoon?: Map<string, number>,
+  classDayMainSubjectCount?: Map<string, number>
 ): number {
   let placed = 0
   const maxPeriods = periodsPerDay || getPeriodsPerDay()
+  const morningPeriodCount = 4
+
+  // 检查是否是主科
+  const isMainSubject = MAIN_SUBJECTS.includes(item.subject as Subject)
 
   while (placed < remainingHours) {
-    const bestSlot = findBestRegularSlot(item, context, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods)
+    const bestSlot = findBestRegularSlot(
+      item, context, teacher, subjectDistribution,
+      subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, maxPeriods,
+      standardDailyDistribution, teacherSubjectDaySlots,
+      teacherPeriodUsage, classDaySubjectMorningAfternoon, classDayMainSubjectCount
+    )
 
     if (bestSlot) {
       const cell = createScheduleCell(item, bestSlot.dayOfWeek, bestSlot.period, false)
@@ -620,6 +1077,40 @@ function placeRegularCourse(
       markSlotOccupied(context.occupancy.classes, item.classId, bestSlot.dayOfWeek, bestSlot.period, cell.id)
 
       incrementSubjectCount(subjectDistribution, item.classId, bestSlot.dayOfWeek, item.subject)
+
+      // 更新主科优化追踪器
+      if (isMainSubject) {
+        const isMorning = isMorningPeriod(bestSlot.period, morningPeriodCount)
+
+        // 更新全校学科日分布
+        if (schoolSubjectDayCount) {
+          incrementSchoolSubjectDayCount(schoolSubjectDayCount, item.subject, bestSlot.dayOfWeek)
+        }
+
+        // 更新班级-天-学科-上午/下午分布
+        if (classDaySubjectMorningAfternoon) {
+          incrementClassDaySubjectMorningAfternoon(
+            classDaySubjectMorningAfternoon, item.classId, bestSlot.dayOfWeek, item.subject, isMorning
+          )
+        }
+
+        // 更新教师-学科-天-时段分布
+        if (teacherSubjectDaySlots && item.teacherId) {
+          incrementTeacherSubjectDaySlot(
+            teacherSubjectDaySlots, item.teacherId, item.subject, bestSlot.dayOfWeek, isMorning
+          )
+        }
+
+        // 更新教师节次使用频率
+        if (teacherPeriodUsage && item.teacherId) {
+          incrementTeacherPeriodUsage(teacherPeriodUsage, item.teacherId, bestSlot.period)
+        }
+
+        // 更新班级每天主课总数
+        if (classDayMainSubjectCount) {
+          incrementClassDayMainSubjectCount(classDayMainSubjectCount, item.classId, bestSlot.dayOfWeek)
+        }
+      }
 
       placed++
     } else {
@@ -847,6 +1338,25 @@ export function runGreedyScheduler(
     }
   }
 
+  // [主科优化] 计算主科的标准日分布
+  const standardDailyDistribution = calculateStandardDailyDistribution(curriculumItems, MAIN_SUBJECTS)
+
+  // [主科优化] 初始化新增的追踪器
+  // 追踪全校每个学科每天已排的课时数（用于全校进度同步）
+  const schoolSubjectDayCount = new Map<string, number>()
+
+  // 追踪每个班级每天每学科在上午/下午的分布（用于同日同科上下午分布）
+  const classDaySubjectMorningAfternoon = new Map<string, number>()
+
+  // 追踪每个班级每天的主课总数（用于每日主课上限）
+  const classDayMainSubjectCount = new Map<string, number>()
+
+  // 追踪每个教师+学科组合在某天的时段分布（用于教师进度同步）
+  const teacherSubjectDaySlots = new Map<string, number>()
+
+  // 追踪每个教师在每个节次的使用频率（用于教师节次分散）
+  const teacherPeriodUsage = new Map<string, number>()
+
   // 排序课程条目
   const sortedItems = sortCurriculumItems(curriculumItems)
 
@@ -861,19 +1371,32 @@ export function runGreedyScheduler(
 
     // 1. 放置固定时段课程
     if (item.fixedSlots && item.fixedSlots.length > 0) {
-      const fixedPlaced = placeFixedSlots(item, context, allCells, allConflicts, teacher, subjectDistribution)
+      const fixedPlaced = placeFixedSlots(
+        item, context, allCells, allConflicts, teacher, subjectDistribution,
+        schoolSubjectDayCount, teacherSubjectDaySlots, teacherPeriodUsage, classDaySubjectMorningAfternoon
+      )
       remainingHours -= fixedPlaced
     }
 
     // 2. 如果是连堂课，优先处理连堂
     if (item.isConsecutive && remainingHours > 0) {
-      const consecutivePlaced = placeConsecutiveCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay)
+      const consecutivePlaced = placeConsecutiveCourse(
+        item, context, allCells, remainingHours, teacher, subjectDistribution,
+        subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay,
+        standardDailyDistribution, schoolSubjectDayCount, teacherSubjectDaySlots,
+        teacherPeriodUsage, classDaySubjectMorningAfternoon, classDayMainSubjectCount
+      )
       remainingHours -= consecutivePlaced
     }
 
     // 3. 放置剩余的普通课程（均匀分布）
     if (remainingHours > 0) {
-      const regularPlaced = placeRegularCourse(item, context, allCells, remainingHours, teacher, subjectDistribution, subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay)
+      const regularPlaced = placeRegularCourse(
+        item, context, allCells, remainingHours, teacher, subjectDistribution,
+        subjectForbiddenSlots, subjectDailyMax, subjectTimePreference, periodsPerDay,
+        standardDailyDistribution, schoolSubjectDayCount, teacherSubjectDaySlots,
+        teacherPeriodUsage, classDaySubjectMorningAfternoon, classDayMainSubjectCount
+      )
       remainingHours -= regularPlaced
     }
 
